@@ -26,7 +26,7 @@ cargo install git-insights
 cargo install --git https://github.com/Magnus167/git-insights.git
 ```
 
-### Building from source:
+### Building from source
 
 ```bash
 git clone https://github.com/Magnus167/git-insights.git
