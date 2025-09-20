@@ -19,3 +19,29 @@ pub enum Commands {
         username: String,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_stats() {
+        let cli = Cli::parse_from(&["git-insights", "stats"]);
+        assert!(matches!(cli.command, Commands::Stats));
+    }
+
+    #[test]
+    fn test_cli_json() {
+        let cli = Cli::parse_from(&["git-insights", "json"]);
+        assert!(matches!(cli.command, Commands::Json));
+    }
+
+    #[test]
+    fn test_cli_user() {
+        let cli = Cli::parse_from(&["git-insights", "user", "testuser"]);
+        match cli.command {
+            Commands::User { username } => assert_eq!(username, "testuser"),
+            _ => panic!("Expected User command"),
+        }
+    }
+}
