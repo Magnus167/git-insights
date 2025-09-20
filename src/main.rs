@@ -1,4 +1,3 @@
-use clap::Parser;
 use git_insights::{
     cli::{Cli, Commands},
     git::{is_git_installed, is_in_git_repo},
@@ -21,7 +20,13 @@ fn main() {
         std::process::exit(1);
     }
 
-    let cli = Cli::parse();
+    let cli = match Cli::parse() {
+        Ok(cli) => cli,
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    };
 
     match &cli.command {
         Commands::Stats => {
