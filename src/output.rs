@@ -113,3 +113,58 @@ pub fn print_user_stats(username: &str, stats: &UserStats) {
         println!("\nNo tags found where this user is an author.");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::stats::{AuthorStats, UserStats};
+    use std::collections::HashSet;
+    use std::time::Instant;
+
+    #[test]
+    fn test_print_table() {
+        let mut data = Vec::new();
+        let mut files = HashSet::new();
+        files.insert("file1.rs".to_string());
+        data.push((
+            "test_author".to_string(),
+            AuthorStats {
+                loc: 100,
+                commits: 10,
+                files,
+            },
+        ));
+        // Should not panic
+        print_table(data, 100, 10, 1);
+    }
+
+    #[test]
+    fn test_print_progress() {
+        let start_time = Instant::now();
+        // Should not panic
+        print_progress(50, 100, start_time);
+    }
+
+    #[test]
+    fn test_print_user_stats() {
+        let mut tags = HashSet::new();
+        tags.insert("v1.0".to_string());
+        tags.insert("v1.1".to_string());
+        let stats = UserStats {
+            pull_requests: 5,
+            tags,
+        };
+        // Should not panic
+        print_user_stats("test_user", &stats);
+    }
+
+    #[test]
+    fn test_print_user_stats_no_tags() {
+        let stats = UserStats {
+            pull_requests: 2,
+            tags: HashSet::new(),
+        };
+        // Should not panic
+        print_user_stats("test_user_no_tags", &stats);
+    }
+}
