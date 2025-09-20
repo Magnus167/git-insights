@@ -1,0 +1,10 @@
+[package]
+name = "git-insights"
+version = "0.0.1"
+edition = "2021"
+description = "A cli tool to generate Git repo stats and insights."
+license = "MIT"
+repository = "https://github.com/Magnus167/git-insights"
+readme = "README.md"
+keywords = ["git", "cli", "insights", "stats", "devtools"]
+categories = ["command-line-utilities", "development-tools"]
