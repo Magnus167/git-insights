@@ -4,13 +4,22 @@ A cli tool to generate Git repo stats and insights.
 
 ## Features
 
-- [x] Commit count
-- [x] Contributor stats
-- [ ] Heatmaps/Hotspots
-- [ ] Per user stats
-- [ ] File-owner estimations
-- [ ] Export to CSV/JSON
-- [ ] ...
+- [x] Overall repository statistics
+  - [x] Total commit count
+  - [x] Total file count
+  - [x] Total lines of code (LOC)
+- [ ] Individual user insights
+  - [ ] Get file "ownership" list
+  - [ ] Total locs, inserts, updates, deletes
+  - [ ] Past PRs/issues count
+  - [x] Tags/releases count
+- [ ] Data export
+  - [x] Export to JSON
+  - [ ] Export to CSV
+- [ ] Visualizations
+  - [ ] Commit heatmap
+  - [ ] Hotspot analysis
+  - [ ] Timeline charts
 
 ## Installation
 
@@ -36,13 +45,12 @@ cargo install --path .
 
 ## Usage
 
-For now, there are no arguments or options. Just run:
+`git-insights` provides several commands to analyze your repository.
+To see the available commands and options, run:
 
 ```bash
-git-insights
+git-insights --help
 ```
-
-Future versions will have more options and features, and a help command.
 
 ## License
 
