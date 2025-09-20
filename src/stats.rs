@@ -113,3 +113,54 @@ pub fn gather_user_stats(username: &str) -> Result<UserStats, String> {
 
     Ok(user_stats)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_author_stats_default() {
+        let stats = AuthorStats::default();
+        assert_eq!(stats.loc, 0);
+        assert_eq!(stats.commits, 0);
+        assert!(stats.files.is_empty());
+    }
+
+    #[test]
+    fn test_user_stats_default() {
+        let stats = UserStats::default();
+        assert!(stats.tags.is_empty());
+        assert_eq!(stats.pull_requests, 0);
+    }
+
+    #[test]
+    fn test_gather_commit_stats_runs_ok() {
+        // This test runs against the live git repository.
+        let result = gather_commit_stats();
+        assert!(result.is_ok());
+        let stats = result.unwrap();
+        // The project should have at least one commit/author.
+        assert!(!stats.is_empty());
+    }
+
+    #[test]
+    #[ignore] // This test is slow and prints to stdout.
+    fn test_gather_loc_and_file_stats_runs_ok() {
+        // This test runs against the live git repository and can be slow.
+        let result = gather_loc_and_file_stats();
+        assert!(result.is_ok());
+        let stats = result.unwrap();
+        // The project should have some stats.
+        assert!(!stats.is_empty());
+    }
+
+    #[test]
+    fn test_gather_user_stats_for_unknown_user() {
+        // Test with a user that almost certainly doesn't exist.
+        let result = gather_user_stats("a-very-unlikely-user-name-to-exist");
+        assert!(result.is_ok());
+        let stats = result.unwrap();
+        assert_eq!(stats.pull_requests, 0);
+        assert!(stats.tags.is_empty());
+    }
+}
