@@ -57,3 +57,35 @@ pub fn is_in_git_repo() -> bool {
         .status()
         .map_or(false, |s| s.success())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_git_installed() {
+        // This test assumes git is installed on the system running the tests
+        assert!(is_git_installed());
+    }
+
+    #[test]
+    fn test_is_in_git_repo() {
+        // This test will pass because the project is a git repository
+        assert!(is_in_git_repo());
+    }
+
+    #[test]
+    fn test_run_command_success() {
+        // Test a command that should succeed
+        let result = run_command(&["--version"]);
+        assert!(result.is_ok());
+        assert!(result.unwrap().starts_with("git version"));
+    }
+
+    #[test]
+    fn test_run_command_failure() {
+        // Test a command that should fail
+        let result = run_command(&["invalid-command"]);
+        assert!(result.is_err());
+    }
+}
