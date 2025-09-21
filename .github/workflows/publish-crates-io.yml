@@ -8,17 +8,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  publish:
+  publish-crate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
       - name: Check crate version on crates.io
+        id: version-check-release
         run: |
           python .github/scripts/version_check.py
 
       - name: Run tests
+        id: run-tests-release
         run: cargo test --release --verbose
 
       - name: Publish to crates.io
+        id: publish-crate
         run: cargo publish --verbose --token ${{ secrets.CARGO_REGISTRY_TOKEN }} 
