@@ -11,7 +11,14 @@ pub enum Commands {
     // Default grouping by author name; pass --by-email/-e to group by name+email
     Stats { by_name: bool },
     Json,
-    User { username: String },
+    // user <username> [--ownership] [--by-email|-e] [--top N|--top=N] [--sort loc|pct|--sort=loc]
+    User {
+        username: String,
+        ownership: bool,
+        by_email: bool,
+        top: Option<usize>,
+        sort: Option<String>,
+    },
     Help { topic: HelpTopic },
     Version,
 }
@@ -27,9 +34,7 @@ impl Cli {
         Cli::parse_from_args(args)
     }
 
-    // Public for testing; accepts a custom args vector including argv[0]
     pub fn parse_from_args(args: Vec<String>) -> Result<Cli, String> {
-        // No subcommand provided: show top-level help
         if args.len() < 2 {
             return Ok(Cli {
                 command: Commands::Help {
@@ -40,7 +45,6 @@ impl Cli {
 
         let command_str = &args[1];
 
-        // Global help/version
         if command_str == "-h" || command_str == "--help" {
             return Ok(Cli {
                 command: Commands::Help {
@@ -54,16 +58,13 @@ impl Cli {
             });
         }
 
-        // Subcommand parsing
         let command = match command_str.as_str() {
             "stats" => {
-                // Per-command help
                 if has_flag(&args[2..], "-h") || has_flag(&args[2..], "--help") {
                     Commands::Help {
                         topic: HelpTopic::Stats,
                     }
                 } else {
-                    // Default to by_name=true; --by-email/-e makes by_name=false
                     let by_email =
                         has_flag(&args[2..], "--by-email") || has_flag(&args[2..], "-e");
                     let by_name = !by_email;
@@ -86,10 +87,51 @@ impl Cli {
                     }
                 } else {
                     if args.len() < 3 {
-                        return Err("Usage: git-insights user <username>".to_string());
+                        return Err("Usage: git-insights user <username> [--ownership] [--by-email|-e] [--top N] [--sort loc|pct]".to_string());
                     }
                     let username = args[2].clone();
-                    Commands::User { username }
+                    let mut ownership = false;
+                    let mut by_email = false;
+                    let mut top: Option<usize> = None;
+                    let mut sort: Option<String> = None;
+
+                    let rest = &args[3..];
+                    let mut i = 0;
+                    while i < rest.len() {
+                        let a = &rest[i];
+                        if a == "--ownership" {
+                            ownership = true;
+                        } else if a == "--by-email" || a == "-e" {
+                            by_email = true;
+                        } else if a == "--top" {
+                            if i + 1 < rest.len() {
+                                if let Ok(v) = rest[i + 1].parse::<usize>() {
+                                    top = Some(v);
+                                }
+                                i += 1;
+                            }
+                        } else if let Some(eq) = a.strip_prefix("--top=") {
+                            if let Ok(v) = eq.parse::<usize>() {
+                                top = Some(v);
+                            }
+                        } else if a == "--sort" {
+                            if i + 1 < rest.len() {
+                                sort = Some(rest[i + 1].to_lowercase());
+                                i += 1;
+                            }
+                        } else if let Some(eq) = a.strip_prefix("--sort=") {
+                            sort = Some(eq.to_lowercase());
+                        }
+                        i += 1;
+                    }
+
+                    Commands::User {
+                        username,
+                        ownership,
+                        by_email,
+                        top,
+                        sort,
+                    }
                 }
             }
             _ => {
@@ -105,12 +147,10 @@ impl Cli {
     }
 }
 
-// Small helper for flag presence
 fn has_flag(args: &[String], needle: &str) -> bool {
     args.iter().any(|a| a == needle)
 }
 
-// Render help text by topic; returned as a String for flexible printing
 pub fn render_help(topic: HelpTopic) -> String {
     match topic {
         HelpTopic::Top => {
@@ -151,7 +191,7 @@ git-insights stats
 Compute repository stats using a gitfame-like method:
 - Surviving LOC via git blame --line-porcelain HEAD
 - Commits via git shortlog -s -e HEAD
-- Only text files considered (git grep -I --name-only . HEAD ∩ ls-files)
+- Only text files considered (git grep -I --name-only . HEAD AND ls-files)
 - Clean git commands (no pager), no dependencies
 
 USAGE:
@@ -184,15 +224,30 @@ EXAMPLES:
             "\
 git-insights user
 
-Show basic insights for a specific user:
+Show insights for a specific user.
+
+Default behavior:
 - Merged pull request count (via commit message heuristics)
 - Tags where the user authored commits
 
+Ownership mode (per-file \"ownership\" list):
+- Computes surviving LOC per file attributed to this user at HEAD via blame
+- Shows file path, user LOC, file LOC, and ownership percentage
+
 USAGE:
-  git-insights user <username>
+  git-insights user <username> [--ownership] [--by-email|-e] [--top N] [--sort loc|pct]
+
+OPTIONS:
+  --ownership       Show per-file ownership table for this user
+  -e, --by-email    Match by email (author-mail) instead of author name
+  --top N           Limit to top N rows (default: 10)
+  --sort loc|pct    Sort by user LOC (loc, default) or percentage (pct)
+  -h, --help        Show this help
 
 EXAMPLES:
-  git-insights user alice"
+  git-insights user alice
+  git-insights user alice --ownership
+  git-insights user \"alice@example.com\" --ownership --by-email --top 5 --sort pct"
                 .to_string()
         }
     }
@@ -264,8 +319,62 @@ mod tests {
         ])
         .expect("Failed to parse args");
         match cli.command {
-            Commands::User { username } => assert_eq!(username, "testuser"),
+            Commands::User { username, ownership, by_email, top, sort } => {
+                assert_eq!(username, "testuser");
+                assert!(!ownership);
+                assert!(!by_email);
+                assert!(top.is_none());
+                assert!(sort.is_none());
+            }
             _ => panic!("Expected User command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_user_ownership_flags() {
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "user".to_string(),
+            "palash".to_string(),
+            "--ownership".to_string(),
+            "--by-email".to_string(),
+            "--top".to_string(),
+            "5".to_string(),
+            "--sort".to_string(),
+            "pct".to_string(),
+        ])
+        .expect("Failed to parse args");
+        match cli.command {
+            Commands::User { username, ownership, by_email, top, sort } => {
+                assert_eq!(username, "palash");
+                assert!(ownership);
+                assert!(by_email);
+                assert_eq!(top, Some(5));
+                assert_eq!(sort.as_deref(), Some("pct"));
+            }
+            _ => panic!("Expected User command with ownership flags"),
+        }
+
+        // equals-style flags should also parse
+        let cli2 = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "user".to_string(),
+            "palash".to_string(),
+            "--ownership".to_string(),
+            "-e".to_string(),
+            "--top=3".to_string(),
+            "--sort=loc".to_string(),
+        ])
+        .expect("Failed to parse args");
+        match cli2.command {
+            Commands::User { username, ownership, by_email, top, sort } => {
+                assert_eq!(username, "palash");
+                assert!(ownership);
+                assert!(by_email);
+                assert_eq!(top, Some(3));
+                assert_eq!(sort.as_deref(), Some("loc"));
+            }
+            _ => panic!("Expected User command with equals-style flags"),
         }
     }
 
@@ -336,6 +445,6 @@ mod tests {
     fn test_cli_user_no_username() {
         let err = Cli::parse_from_args(vec!["git-insights".to_string(), "user".to_string()])
             .expect_err("Expected an error for user command without username");
-        assert_eq!(err, "Usage: git-insights user <username>");
+        assert_eq!(err, "Usage: git-insights user <username> [--ownership] [--by-email|-e] [--top N] [--sort loc|pct]");
     }
 }

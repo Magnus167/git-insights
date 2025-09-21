@@ -47,7 +47,53 @@ pub fn print_table(
         );
     }
 }
+ 
+/// Prints a file ownership table for a user.
+/// Rows: (file, user_loc, file_loc, pct)
+pub fn print_user_ownership(rows: &[(String, usize, usize, f32)]) {
+    println!(
+        "| {:<40} | {:>7} | {:>7} | {:>6} |",
+        "File", "userLOC", "fileLOC", "%own"
+    );
+    println!(
+        "|:{:-<40}|{:->9}|{:->9}|{:->8}|",
+        "", "", "", ""
+    );
+    for (file, u, f, pct) in rows {
+        println!(
+            "| {:<40} | {:>7} | {:>7} | {:>5.1} |",
+            truncate(file, 40),
+            u,
+            f,
+            pct
+        );
+    }
+}
 
+// helper to truncate long file paths for table display
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else if max > 3 {
+        let cut = max - 3;
+        // Prefer to keep a trailing '-' if we cut right before it
+        // e.g., "this-is-long", max=10 -> "this-is-..."
+        let mut end = cut;
+        if end > 0 && end < s.len() {
+            let prev = &s[end.saturating_sub(1)..end];
+            let cur = &s[end..end + 1];
+            if prev != "-" && cur == "-" {
+                end += 1;
+            }
+        }
+        let mut out = s[..end].to_string();
+        out.push_str("...");
+        out
+    } else {
+        s[..max].to_string()
+    }
+}
+ 
 /// Renders a progress bar to the console.
 pub fn print_progress(processed: usize, total: usize, start_time: Instant) {
     const BAR_WIDTH: usize = 50;
@@ -60,7 +106,7 @@ pub fn print_progress(processed: usize, total: usize, start_time: Instant) {
         0.0
     };
     let bar: String = (0..BAR_WIDTH)
-        .map(|i| if i < filled_width { '█' } else { ' ' })
+        .map(|i| if i < filled_width { '#' } else { ' ' })
         .collect();
     print!(
         "\rProcessing: {:3.0}%|{}| {}/{} [{:.2} file/s]",
@@ -155,5 +201,22 @@ mod tests {
         };
         // Should not panic
         print_user_stats("test_user_no_tags", &stats);
+    }
+
+    #[test]
+    fn test_print_user_ownership() {
+        let rows = vec![
+            ("src/lib.rs".to_string(), 10, 20, 50.0),
+            ("README.md".to_string(), 5, 5, 100.0),
+        ];
+        // Should not panic
+        super::print_user_ownership(&rows);
+    }
+
+    #[test]
+    fn test_truncate() {
+        assert_eq!(super::truncate("short", 10), "short");
+        assert_eq!(super::truncate("exactlyten", 10), "exactlyten");
+        assert_eq!(super::truncate("this-is-long", 10), "this-is-...");
     }
 }
