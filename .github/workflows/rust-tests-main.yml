@@ -1,0 +1,17 @@
+name: Rust PR Tests
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  unittests-main-status:
+    name: unittests-main-status
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run tests
+        run: cargo test --release --verbose
