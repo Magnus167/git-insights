@@ -52,17 +52,18 @@ pub fn print_table(
 /// Rows: (file, user_loc, file_loc, pct)
 pub fn print_user_ownership(rows: &[(String, usize, usize, f32)]) {
     println!(
-        "| {:<40} | {:>7} | {:>7} | {:>6} |",
-        "File", "userLOC", "fileLOC", "%own"
+        "| {:>4} | {:<60} | {:>7} | {:>7} | {:>6} |",
+        "No.", "File", "userLOC", "fileLOC", "%own"
     );
     println!(
-        "|:{:-<40}|{:->9}|{:->9}|{:->8}|",
-        "", "", "", ""
+        "|{:->6}|:{:-<60}|{:->9}|{:->9}|{:->8}|",
+        "", "", "", "", ""
     );
-    for (file, u, f, pct) in rows {
+    for (i, (file, u, f, pct)) in rows.iter().enumerate() {
         println!(
-            "| {:<40} | {:>7} | {:>7} | {:>5.1} |",
-            truncate(file, 40),
+            "| {:>4} | {:<60} | {:>7} | {:>7} | {:>5.1} |",
+            i + 1,
+            truncate(file, 60),
             u,
             f,
             pct
