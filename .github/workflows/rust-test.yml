@@ -1,4 +1,4 @@
-name: Rust Tests
+name: Rust PR Tests
 
 on:
   push:
@@ -10,15 +10,17 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
+  run-pr-tests:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v5
 
       - name: Check crate version on crates.io
+        id: version-check
         run: |
           python .github/scripts/version_check.py
 
       - name: Run tests
+        id: run-tests
         run: cargo test --release --verbose
