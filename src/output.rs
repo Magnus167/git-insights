@@ -1,8 +1,6 @@
 use crate::stats::{AuthorStats, UserStats};
 use std::io::{self, Write};
 use std::time::Instant;
-use version_compare::{Cmp, Version};
-use std::cmp::Ordering;
 
 /// Prints a formatted table of author statistics.
 pub fn print_table(
@@ -84,16 +82,7 @@ pub fn print_user_stats(username: &str, stats: &UserStats) {
     if !stats.tags.is_empty() {
         println!("\nAuthored in the following tags:");
         let mut sorted_tags: Vec<_> = stats.tags.iter().collect();
-        sorted_tags.sort_by(|a, b| {
-            let a_ver = Version::from(a).unwrap_or(Version::from("0.0.0").unwrap());
-            let b_ver = Version::from(b).unwrap_or(Version::from("0.0.0").unwrap());
-            match a_ver.compare(&b_ver) {
-                Cmp::Lt => Ordering::Less,
-                Cmp::Eq => Ordering::Equal,
-                Cmp::Gt => Ordering::Greater,
-                _ => Ordering::Equal,
-            }
-        });
+        sorted_tags.sort();
 
         let tag_count = sorted_tags.len();
         if tag_count <= 6 {
