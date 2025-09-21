@@ -1,4 +1,4 @@
-name: Rust PR Tests
+name: Rust Tests on Main
 
 on:
   push:
