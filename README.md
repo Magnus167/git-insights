@@ -20,6 +20,13 @@ A cli tool to generate Git repo stats and insights.
   - [ ] Commit heatmap
   - [ ] Hotspot analysis
   - [ ] Timeline charts
+- [x] CLI/UX
+  - [x] Fast, no-deps
+  - [x] Helpful global and per-command help
+  - [x] Version command
+  - [x] Clean progress spinner while processing files
+  - [x] Group by author name by default, or use --by-email for `"Name <email>"`
+  - [x] Clean git calls (no pager)
 
 ## Installation
 
