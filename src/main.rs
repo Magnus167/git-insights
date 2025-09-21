@@ -1,8 +1,11 @@
 use git_insights::{
     cli::{Cli, Commands, HelpTopic, render_help, version_string},
     git::{is_git_installed, is_in_git_repo},
-    output::print_user_stats,
-    stats::{gather_commit_stats, gather_loc_and_file_stats, gather_user_stats, run_stats},
+    output::{print_user_stats, print_user_ownership},
+    stats::{
+        gather_commit_stats, gather_loc_and_file_stats, gather_user_stats, run_stats,
+        get_user_file_ownership,
+    },
 };
 use std::fs::File;
 use std::io::Write;
@@ -60,8 +63,21 @@ fn main() {
         Commands::Json => {
             export_to_json();
         }
-        Commands::User { username } => {
-            get_user_insights(username);
+        Commands::User { username, ownership, by_email, top, sort } => {
+            if *ownership {
+                // defaults
+                let top_n = top.unwrap_or(10);
+                let sort_pct = sort.as_deref().map(|s| s == "pct").unwrap_or(false);
+                match get_user_file_ownership(username, *by_email, top_n, sort_pct) {
+                    Ok(rows) => print_user_ownership(&rows),
+                    Err(e) => {
+                        eprintln!("Error computing ownership: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                get_user_insights(username);
+            }
         }
         // Help/Version already handled above
         _ => {}
