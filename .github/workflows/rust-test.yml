@@ -18,7 +18,7 @@ jobs:
 
       - name: Check crate version on crates.io
         run: |
-          python ./scripts/version_check.py
+          python .github/scripts/version_check.py
 
       - name: Run tests
         run: cargo test --release --verbose
