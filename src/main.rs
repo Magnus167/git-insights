@@ -1,4 +1,3 @@
-use clap::Parser;
 use git_insights::{
     cli::{Cli, Commands},
     git::{is_git_installed, is_in_git_repo},
@@ -21,7 +20,13 @@ fn main() {
         std::process::exit(1);
     }
 
-    let cli = Cli::parse();
+    let cli = match Cli::parse() {
+        Ok(cli) => cli,
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    };
 
     match &cli.command {
         Commands::Stats => {
@@ -80,7 +85,11 @@ fn export_to_json() {
         final_stats.entry(author).or_default().commits = data.commits;
     }
 
-    let json_output = serde_json::to_string_pretty(&final_stats).expect("Failed to serialize stats to JSON.");
+    let mut json_parts = Vec::new();
+    for (author, stats) in final_stats.iter() {
+        json_parts.push(format!("\"{}\": {}", author, stats.to_json()));
+    }
+    let json_output = format!("{{\n{}\n}}", json_parts.join(",\n"));
     let mut file = File::create("git-insights.json").expect("Failed to create JSON file.");
     file.write_all(json_output.as_bytes()).expect("Failed to write JSON to file.");
     println!("Successfully exported to git-insights.json");
