@@ -17,10 +17,8 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Check crate version on crates.io
-        id: version-check
         run: |
           python .github/scripts/version_check.py
 
       - name: Run tests
-        id: run-tests
         run: cargo test --release --verbose
