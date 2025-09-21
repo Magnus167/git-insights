@@ -2,16 +2,16 @@ name: Rust PR Tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   version-check-pr:
-    name: Version Check (PR)
+    name: version-check-pr
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -19,7 +19,7 @@ jobs:
         run: python .github/scripts/version_check.py
 
   unittests-pr:
-    name: Unit Tests (PR)
+    name: unittests-pr
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
