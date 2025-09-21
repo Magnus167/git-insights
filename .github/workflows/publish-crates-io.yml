@@ -1,0 +1,24 @@
+name: Publish to crates.io
+
+on:
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check crate version on crates.io
+        run: |
+          python .github/scripts/version_check.py
+
+      - name: Run tests
+        run: cargo test --release --verbose
+
+      - name: Publish to crates.io
+        run: cargo publish --verbose --token ${{ secrets.CARGO_REGISTRY_TOKEN }} 
