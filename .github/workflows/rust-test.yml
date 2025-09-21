@@ -14,6 +14,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v5
-    - name: Run tests
-      run: cargo test --release --verbose
+      - uses: actions/checkout@v5
+
+      - name: Check crate version on crates.io
+        run: |
+          python .github/scripts/version_check.py
+
+      - name: Run tests
+        run: cargo test --release --verbose
