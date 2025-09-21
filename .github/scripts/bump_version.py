@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 import os
 import re
 import sys
 import subprocess
 import json
+import argparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from pathlib import Path
@@ -47,7 +49,6 @@ def check_only_two_files_modified():
     for line in out.splitlines():
         if not line.strip():
             continue
-        _status = line[:2]
         path = line[3:].strip()
         paths.append(path)
     allowed = {"Cargo.toml", "Cargo.lock"}
@@ -105,35 +106,34 @@ def github_api(token: str, method: str, url: str, payload: dict):
         with urlopen(req) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except HTTPError as e:
-        # If PR already exists for this head, GitHub returns 422; allow that to succeed silently.
-        if e.code == 422:
+        if e.code == 422:  # PR already exists
             return None
         sys.stderr.write(e.read().decode("utf-8"))
         sys.exit(e.code)
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--create-pull-request",
+        action="store_true",
+        help="Also push branch and open PR on GitHub",
+    )
+    args = parser.parse_args()
+
     if not CARGO_TOML.exists():
         sys.exit("Cargo.toml not found")
 
-    # 1) bump patch
     bump_patch_in_cargo_toml(CARGO_TOML)
+    if os.system("cargo build") != 0:
+        sys.exit(1)
 
-    # 2) build
-    rc = os.system("cargo build")
-    if rc != 0:
-        sys.exit(rc)
-
-    # 3) only those two files changed
     check_only_two_files_modified()
-
-    # 4) identical single-line change
     old_toml, new_toml = extract_single_line_change("Cargo.toml")
     old_lock, new_lock = extract_single_line_change("Cargo.lock")
     if new_toml != new_lock or old_toml != old_lock:
         sys.exit("Changed line in Cargo.toml and Cargo.lock are not identical")
 
-    # 5) version, branch, commit, push
     version = read_version_from_toml(CARGO_TOML)
     branch = f"chore/bump-v{version}"
 
@@ -141,7 +141,6 @@ def main():
     git("config", "user.name", actor)
     git("config", "user.email", f"{actor}@users.noreply.github.com")
 
-    # Create/checkout branch (idempotent if re-run on same SHA)
     existing = run(f"git rev-parse --verify {branch}")
     if existing.returncode != 0:
         git("checkout", "-b", branch)
@@ -149,44 +148,31 @@ def main():
         git("checkout", branch)
 
     git("add", "Cargo.toml", "Cargo.lock")
-    # If nothing to commit (e.g., re-run), skip commit
     status = git("status", "--porcelain")
     if status:
         git("commit", "-m", f"bump: Cargo to v{version}")
 
-    # Push branch
-    run(f"git push --set-upstream origin {branch}")
-    # allow success even if branch already exists
-    if run(f"git push origin {branch}").returncode not in (0,):
-        pass
+    if args.create_pull_request:
+        run(f"git push --set-upstream origin {branch}")
 
-    # 6) Create PR via GitHub API
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if not token:
-        sys.exit("GITHUB_TOKEN not set")
+        token = os.environ.get("GITHUB_TOKEN")
+        repo = os.environ.get("GITHUB_REPOSITORY")
+        base = os.environ.get("GITHUB_REF_NAME") or "main"
+        if not (token and repo):
+            sys.exit("Missing GITHUB_TOKEN or GITHUB_REPOSITORY")
 
-    repo = os.environ.get("GITHUB_REPOSITORY")  # e.g. owner/repo
-    if not repo:
-        sys.exit("GITHUB_REPOSITORY not set")
-
-    base = os.environ.get("GITHUB_REF_NAME") or "main"
-    title = f"v{version}"
-    body = f"Automated patch bump to v{version}."
-
-    api_url = f"https://api.github.com/repos/{repo}/pulls"
-    github_api(
-        token,
-        "POST",
-        api_url,
-        {
-            "title": title,
-            "head": branch,
-            "base": base,
-            "body": body,
-            "maintainer_can_modify": True,
-            "draft": False,
-        },
-    )
+        api_url = f"https://api.github.com/repos/{repo}/pulls"
+        github_api(
+            token,
+            "POST",
+            api_url,
+            {
+                "title": f"v{version}",
+                "head": branch,
+                "base": base,
+                "body": f"Automated patch bump to v{version}.",
+            },
+        )
 
 
 if __name__ == "__main__":
