@@ -10,6 +10,8 @@ keywords = ["git", "cli", "insights", "stats", "devtools"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
+regex = "^1"
+
 
 [[bin]]
 name = "git-insights"

@@ -1,10 +1,9 @@
 use git_insights::{
     cli::{Cli, Commands},
     git::{is_git_installed, is_in_git_repo},
-    output::{print_table, print_user_stats},
-    stats::{gather_commit_stats, gather_loc_and_file_stats, gather_user_stats},
+    output::print_user_stats,
+    stats::{gather_commit_stats, gather_loc_and_file_stats, gather_user_stats, run_stats},
 };
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 
@@ -29,8 +28,11 @@ fn main() {
     };
 
     match &cli.command {
-        Commands::Stats => {
-            run_insights();
+        Commands::Stats { by_name } => {
+            if let Err(e) = run_stats(*by_name) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Json => {
             export_to_json();
@@ -39,41 +41,6 @@ fn main() {
             get_user_insights(username);
         }
     }
-}
-
-/// Main logic to orchestrate the gathering and presentation of statistics.
-fn run_insights() {
-    // get commit stats
-    let mut commit_stats = gather_commit_stats().expect("Failed to gather commit stats.");
-
-    // get loc and file stats
-    let loc_and_file_stats = gather_loc_and_file_stats().expect("Failed to gather LOC stats.");
-
-    // merge the two stats maps
-    let mut final_stats = loc_and_file_stats;
-    for (author, data) in commit_stats.drain() {
-        final_stats.entry(author).or_default().commits = data.commits;
-    }
-
-    // create final totals from the merged data
-    let total_loc: usize = final_stats.values().map(|s| s.loc).sum();
-    let total_commits: usize = final_stats.values().map(|s| s.commits).sum();
-
-    let mut all_files = HashSet::new();
-    for stats in final_stats.values() {
-        all_files.extend(stats.files.iter().cloned());
-    }
-    let total_files = all_files.len();
-
-    println!("Total commits: {}", total_commits);
-    println!("Total files: {}", total_files);
-    println!("Total loc: {}", total_loc);
-
-    // sort authors by loc in descending order
-    let mut sorted_stats: Vec<_> = final_stats.into_iter().collect();
-    sorted_stats.sort_by(|a, b| b.1.loc.cmp(&a.1.loc));
-
-    print_table(sorted_stats, total_loc, total_commits, total_files);
 }
 
 fn export_to_json() {
