@@ -1,6 +1,10 @@
-name: Bump Cargo version minor/patch & PR
+name: Bump Cargo version patch & PR
 
 on:
+  workflow_run:
+    workflows: ["Publish to crates.io"]
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
