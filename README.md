@@ -8,8 +8,10 @@ A cli tool to generate Git repo stats and insights.
   - [x] Total commit count
   - [x] Total file count
   - [x] Total lines of code (LOC)
+  - [x] Per-author breakdown (LOC/commits/files) with % distribution
 - [ ] Individual user insights
-  - [ ] Get file "ownership" list
+  - [x] Get file "ownership" list
+  - [x] Ownership table flags: `--top N`, `--sort loc|pct` and `--by-email` (default matches by name)
   - [ ] Total locs, inserts, updates, deletes
   - [ ] Past PRs/issues count
   - [x] Tags/releases count
