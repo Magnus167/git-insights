@@ -1,9 +1,10 @@
 use crate::git::{count_pull_requests, run_command};
-use crate::output::print_progress;
+use crate::output::{print_progress, print_table};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
+use std::io::{self, Write};
 
 /// Represents the statistics for a single author.
 #[derive(Default, Debug, Clone)]
@@ -123,17 +124,172 @@ pub fn gather_loc_and_file_stats() -> Result<StatsMap, String> {
 pub fn gather_user_stats(username: &str) -> Result<UserStats, String> {
     let mut user_stats = UserStats::default();
 
-    let tags_output = run_command(&["tag", "--format=%(refname:short)"])?;
+    // Be robust: if tag listing fails, treat as no tags.
+    let tags_output = match run_command(&["tag", "--list", "--format=%(refname:short)"]) {
+        Ok(s) => s,
+        Err(_) => String::new(),
+    };
     for tag in tags_output.lines() {
-        let log_output = run_command(&["log", tag, "--author", username, "--pretty=format:%an"])?;
+        // If git log fails for a tag, treat as no matches for that tag.
+        let log_output = run_command(&["log", tag, "--author", username, "--pretty=format:%an"])
+            .unwrap_or_default();
         if !log_output.is_empty() {
             user_stats.tags.insert(tag.to_string());
         }
     }
 
-    user_stats.pull_requests = count_pull_requests(username)?;
+    // If counting PR merges fails, default to 0 for resilience.
+    user_stats.pull_requests = count_pull_requests(username).unwrap_or(0);
 
     Ok(user_stats)
+}
+
+fn tracked_text_files_head() -> Result<Vec<String>, String> {
+    // Get tracked files in repo (preserve order)
+    let files = run_command(&["--no-pager", "ls-files"])?;
+    let files: Vec<String> = files
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // Get text files at HEAD
+    let grep = run_command(&["--no-pager", "grep", "-I", "--name-only", ".", "HEAD"])?;
+    let mut text: HashSet<String> = HashSet::new();
+    for mut line in grep.lines().map(|s| s.trim()) {
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(stripped) = line.strip_prefix("HEAD:") {
+            line = stripped;
+        }
+        text.insert(line.to_string());
+    }
+
+    // Intersect while preserving original order
+    let filtered: Vec<String> = files.into_iter().filter(|f| text.contains(f)).collect();
+    Ok(filtered)
+}
+
+/// Gather surviving LOC per author via blame --line-porcelain HEAD.
+/// by_name=false groups by "Name <email>", by_name=true groups by name only.
+pub fn gather_loc_and_file_statsx(by_name: bool) -> Result<StatsMap, String> {
+    let files = tracked_text_files_head()?;
+    let mut stats: StatsMap = HashMap::new();
+
+    let total = files.len();
+    let mut idx: usize = 0;
+    let spinner = ['|', '/', '-', '\\'];
+
+    for file in files {
+        idx += 1;
+        // progress indicator on stdout
+        let ch = spinner[idx % spinner.len()];
+        print!("\rProcessing: {}/{} {}", idx, total, ch);
+        let _ = io::stdout().flush();
+
+        let blame = run_command(&["--no-pager", "blame", "--line-porcelain", "HEAD", "--", &file]);
+        if blame.is_err() {
+            continue;
+        }
+        let blame = blame.unwrap();
+
+        let mut current_name: Option<String> = None;
+        let mut current_mail: Option<String> = None;
+
+        for line in blame.lines() {
+            if let Some(rest) = line.strip_prefix("author ") {
+                current_name = Some(rest.trim().to_string());
+            } else if let Some(rest) = line.strip_prefix("author-mail ") {
+                current_mail = Some(rest.trim().to_string());
+            } else if line.starts_with('\t') {
+                if let (Some(name), Some(mail)) = (&current_name, &current_mail) {
+                    let key = if by_name {
+                        name.clone()
+                    } else {
+                        format!("{} {}", name, mail)
+                    };
+                    let entry = stats.entry(key).or_default();
+                    entry.loc += 1;
+                    entry.files.insert(file.clone());
+                }
+            }
+        }
+    }
+
+    println!();
+    Ok(stats)
+}
+
+/// Gather commit counts per author via `git shortlog -s -e HEAD`.
+/// by_name=false groups by "Name <email>", by_name=true groups by name only.
+pub fn gather_commit_statsx(by_name: bool) -> Result<StatsMap, String> {
+    let out = run_command(&["--no-pager", "shortlog", "-s", "-e", "HEAD"])?;
+    let mut stats: StatsMap = HashMap::new();
+
+    for line in out.lines() {
+        let l = line.trim();
+        if l.is_empty() {
+            continue;
+        }
+        // parse leading integer
+        let mut idx = 0;
+        while idx < l.len() && l.as_bytes()[idx].is_ascii_whitespace() {
+            idx += 1;
+        }
+        let start_num = idx;
+        while idx < l.len() && l.as_bytes()[idx].is_ascii_digit() {
+            idx += 1;
+        }
+        if start_num == idx {
+            continue;
+        }
+        let num_str = &l[start_num..idx];
+        let commits: usize = num_str.parse().unwrap_or(0);
+        let rest = l[idx..].trim();
+        if rest.is_empty() {
+            continue;
+        }
+        let key = if by_name {
+            let name_part = rest.rsplit_once(" <").map(|(n, _)| n).unwrap_or(rest);
+            name_part.to_string()
+        } else {
+            rest.to_string()
+        };
+        let entry = stats.entry(key).or_default();
+        entry.commits += commits;
+    }
+
+    Ok(stats)
+}
+
+/// Orchestrate stats and print totals + table.
+pub fn run_stats(by_name: bool) -> Result<(), String> {
+    let mut commit_stats = gather_commit_statsx(by_name)?;
+    let loc_stats = gather_loc_and_file_statsx(by_name)?;
+
+    let mut final_stats = loc_stats;
+    for (author, data) in commit_stats.drain() {
+        final_stats.entry(author).or_default().commits = data.commits;
+    }
+
+    let total_loc: usize = final_stats.values().map(|s| s.loc).sum();
+    let total_commits: usize = final_stats.values().map(|s| s.commits).sum();
+
+    let mut all_files = HashSet::new();
+    for stats in final_stats.values() {
+        all_files.extend(stats.files.iter().cloned());
+    }
+    let total_files = all_files.len();
+
+    let mut rows: Vec<(String, AuthorStats)> = final_stats.into_iter().collect();
+    rows.sort_by(|a, b| b.1.loc.cmp(&a.1.loc));
+
+    println!("Total commits: {}", total_commits);
+    println!("Total files: {}", total_files);
+    println!("Total loc: {}", total_loc);
+    print_table(rows, total_loc, total_commits, total_files);
+    Ok(())
 }
 
 #[cfg(test)]
