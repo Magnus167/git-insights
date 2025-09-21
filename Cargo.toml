@@ -10,7 +10,7 @@ keywords = ["git", "cli", "insights", "stats", "devtools"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-regex = "^1"
+regex = "1.11.2"
 
 
 [[bin]]
