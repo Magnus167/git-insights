@@ -1,5 +1,10 @@
 # git-insights
 
+[![Rust Tests on Main](https://github.com/Magnus167/git-insights/actions/workflows/rust-tests-main.yml/badge.svg?branch=main)](https://github.com/Magnus167/git-insights/actions/workflows/rust-tests-main.yml)
+[![Crates.io](https://img.shields.io/crates/v/git-insights.svg)](https://crates.io/crates/git-insights)
+[![Docs](https://docs.rs/git-insights/badge.svg)](https://docs.rs/git-insights)
+[![Deps](https://deps.rs/repo/github/Magnus167/git-insights/status.svg)](https://deps.rs/repo/github/Magnus167/git-insights)
+
 A cli tool to generate Git repo stats and insights.
 
 ## Features
