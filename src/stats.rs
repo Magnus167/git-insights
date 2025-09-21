@@ -1,23 +1,45 @@
 use crate::git::{count_pull_requests, run_command};
 use crate::output::print_progress;
-use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
 /// Represents the statistics for a single author.
-#[derive(Default, Debug, Clone, Serialize)]
+#[derive(Default, Debug, Clone)]
 pub struct AuthorStats {
     pub loc: usize,
     pub commits: usize,
     pub files: HashSet<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize)]
+impl AuthorStats {
+    pub fn to_json(&self) -> String {
+        let files_json: Vec<String> = self.files.iter().map(|f| format!("\"{}\"", f)).collect();
+        format!(
+            "{{\"loc\": {}, \"commits\": {}, \"files\": [{}]}}",
+            self.loc,
+            self.commits,
+            files_json.join(", ")
+        )
+    }
+}
+
+#[derive(Default, Debug, Clone)]
 pub struct UserStats {
     pub tags: HashSet<String>,
     pub pull_requests: usize,
+}
+
+impl UserStats {
+    pub fn to_json(&self) -> String {
+        let tags_json: Vec<String> = self.tags.iter().map(|t| format!("\"{}\"", t)).collect();
+        format!(
+            "{{\"tags\": [{}], \"pull_requests\": {}}}",
+            tags_json.join(", "),
+            self.pull_requests
+        )
+    }
 }
 
 // A type alias for our map of statistics for readability.
@@ -162,5 +184,36 @@ mod tests {
         let stats = result.unwrap();
         assert_eq!(stats.pull_requests, 0);
         assert!(stats.tags.is_empty());
+    }
+
+    #[test]
+    fn test_author_stats_to_json() {
+        let mut author_stats = AuthorStats::default();
+        author_stats.loc = 100;
+        author_stats.commits = 10;
+        author_stats.files.insert("file1.rs".to_string());
+        author_stats.files.insert("file2.rs".to_string());
+
+        let json = author_stats.to_json();
+        // Due to HashSet's unordered nature, we need to check for both possible orders of files.
+        let expected_json1 = "{\"loc\": 100, \"commits\": 10, \"files\": [\"file1.rs\", \"file2.rs\"]}";
+        let expected_json2 = "{\"loc\": 100, \"commits\": 10, \"files\": [\"file2.rs\", \"file1.rs\"]}";
+
+        assert!(json == expected_json1 || json == expected_json2, "Actual JSON: {}", json);
+    }
+
+    #[test]
+    fn test_user_stats_to_json() {
+        let mut user_stats = UserStats::default();
+        user_stats.pull_requests = 5;
+        user_stats.tags.insert("v1.0".to_string());
+        user_stats.tags.insert("v1.1".to_string());
+
+        let json = user_stats.to_json();
+        // Due to HashSet's unordered nature, we need to check for both possible orders of tags.
+        let expected_json1 = "{\"tags\": [\"v1.0\", \"v1.1\"], \"pull_requests\": 5}";
+        let expected_json2 = "{\"tags\": [\"v1.1\", \"v1.0\"], \"pull_requests\": 5}";
+
+        assert!(json == expected_json1 || json == expected_json2, "Actual JSON: {}", json);
     }
 }
