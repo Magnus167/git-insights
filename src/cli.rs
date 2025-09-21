@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub enum Commands {
-    Stats,
+    Stats { by_name: bool },
     Json,
     User { username: String },
 }
@@ -19,13 +19,18 @@ impl Cli {
     // This function is made public for testing purposes, allowing us to pass custom arguments.
     pub fn parse_from_args(args: Vec<String>) -> Result<Cli, String> {
         if args.len() < 2 {
-            return Err("Usage: git-insights [stats|json|user <username>]".to_string());
+            return Err("Usage: git-insights [stats [--by-email]|json|user <username>]".to_string());
         }
 
         let command_str = &args[1];
 
         let command = match command_str.as_str() {
-            "stats" => Commands::Stats,
+            "stats" => {
+                // Default to grouping by name; allow --by-email/-e to switch to name+email.
+                let by_email = args.len() > 2 && args[2..].iter().any(|a| a == "--by-email" || a == "-e");
+                let by_name = !by_email;
+                Commands::Stats { by_name }
+            }
             "json" => Commands::Json,
             "user" => {
                 if args.len() < 3 {
@@ -36,7 +41,7 @@ impl Cli {
             }
             _ => {
                 return Err(format!(
-                    "Unknown command: {}\nUsage: git-insights [stats|json|user <username>]",
+                    "Unknown command: {}\nUsage: git-insights [stats [--by-email]|json|user <username>]",
                     command_str
                 ));
             }
@@ -54,7 +59,52 @@ mod tests {
     fn test_cli_stats() {
         let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "stats".to_string()])
             .expect("Failed to parse args");
-        assert!(matches!(cli.command, Commands::Stats));
+        match cli.command {
+            Commands::Stats { by_name } => assert!(by_name),
+            _ => panic!("Expected Stats command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_stats_by_email_flag_from_statsx_test_slot() {
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "stats".to_string(),
+            "--by-email".to_string(),
+        ])
+        .expect("Failed to parse args");
+        match cli.command {
+            Commands::Stats { by_name } => assert!(!by_name),
+            _ => panic!("Expected Stats command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_stats_by_email_flag() {
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "stats".to_string(),
+            "--by-email".to_string(),
+        ])
+        .expect("Failed to parse args");
+        match cli.command {
+            Commands::Stats { by_name } => assert!(!by_name),
+            _ => panic!("Expected Stats command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_stats_short_e_flag() {
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "stats".to_string(),
+            "-e".to_string(),
+        ])
+        .expect("Failed to parse args");
+        match cli.command {
+            Commands::Stats { by_name } => assert!(!by_name),
+            _ => panic!("Expected Stats command"),
+        }
     }
 
     #[test]
@@ -82,7 +132,7 @@ mod tests {
     fn test_cli_no_args() {
         let err = Cli::parse_from_args(vec!["git-insights".to_string()])
             .expect_err("Expected an error for no args");
-        assert_eq!(err, "Usage: git-insights [stats|json|user <username>]");
+        assert_eq!(err, "Usage: git-insights [stats [--by-email]|json|user <username>]");
     }
 
     #[test]
