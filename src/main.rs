@@ -1,11 +1,12 @@
 use git_insights::{
-    cli::{Cli, Commands, HelpTopic, render_help, version_string},
+    cli::{Cli, Commands, render_help, version_string},
     git::{is_git_installed, is_in_git_repo},
     output::{print_user_stats, print_user_ownership},
     stats::{
         gather_commit_stats, gather_loc_and_file_stats, gather_user_stats, run_stats,
         get_user_file_ownership,
     },
+    visualize::{run_timeline_with_options, run_heatmap_with_options},
 };
 use std::fs::File;
 use std::io::Write;
@@ -23,15 +24,7 @@ fn main() {
     // Handle help/version early and exit 0
     match &cli.command {
         Commands::Help { topic } => {
-            println!(
-                "{}",
-                render_help(match topic {
-                    HelpTopic::Top => HelpTopic::Top,
-                    HelpTopic::Stats => HelpTopic::Stats,
-                    HelpTopic::Json => HelpTopic::Json,
-                    HelpTopic::User => HelpTopic::User,
-                })
-            );
+            println!("{}", render_help(topic.clone()));
             return;
         }
         Commands::Version => {
@@ -77,6 +70,19 @@ fn main() {
                 }
             } else {
                 get_user_insights(username);
+            }
+        }
+        Commands::Timeline { weeks, color } => {
+            let w = weeks.unwrap_or(26);
+            if let Err(e) = run_timeline_with_options(w, *color) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Heatmap { weeks, color } => {
+            if let Err(e) = run_heatmap_with_options(*weeks, *color) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         }
         // Help/Version already handled above
