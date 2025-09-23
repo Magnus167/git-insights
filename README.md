@@ -24,9 +24,9 @@ A cli tool to generate Git repo stats and insights.
   - [x] Export to JSON
   - [ ] Export to CSV
 - [ ] Visualizations
-  - [ ] Commit heatmap
+  - [x] Commit heatmap
   - [ ] Hotspot analysis
-  - [ ] Timeline charts
+  - [x] Timeline charts
 - [x] CLI/UX
   - [x] Fast, no-deps
   - [x] Helpful global and per-command help
