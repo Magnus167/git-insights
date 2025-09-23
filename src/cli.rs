@@ -4,6 +4,8 @@ pub enum HelpTopic {
     Stats,
     Json,
     User,
+    Timeline,
+    Heatmap,
 }
 
 #[derive(Debug)]
@@ -11,6 +13,8 @@ pub enum Commands {
     // Default grouping by author name; pass --by-email/-e to group by name+email
     Stats { by_name: bool },
     Json,
+    Timeline { weeks: Option<usize>, color: bool },
+    Heatmap { weeks: Option<usize>, color: bool },
     // user <username> [--ownership] [--by-email|-e] [--top N|--top=N] [--sort loc|pct|--sort=loc]
     User {
         username: String,
@@ -134,6 +138,100 @@ impl Cli {
                     }
                 }
             }
+            "timeline" => {
+                if has_flag(&args[2..], "-h") || has_flag(&args[2..], "--help") {
+                    Commands::Help { topic: HelpTopic::Timeline }
+                } else {
+                    let mut weeks: Option<usize> = None;
+                    // Default: color ON. Allow disabling with --no-color
+                    let mut color = true;
+
+                    let rest = &args[2..];
+                    let mut i = 0;
+                    while i < rest.len() {
+                        let a = &rest[i];
+                        if a == "--weeks" {
+                            if i + 1 < rest.len() {
+                                if let Ok(v) = rest[i + 1].parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                                i += 1;
+                            }
+                        } else if let Some(eq) = a.strip_prefix("--weeks=") {
+                            if let Ok(v) = eq.parse::<usize>() {
+                                weeks = Some(v);
+                            }
+                        } else if a == "--color" || a == "-c" {
+                            color = true;
+                        } else if a == "--no-color" {
+                            color = false;
+                        } else if let Some(num) = a.strip_prefix("--") {
+                            // support shorthand like: timeline --52
+                            if num.chars().all(|c| c.is_ascii_digit()) {
+                                if let Ok(v) = num.parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                            }
+                        } else if let Some(num) = a.strip_prefix('-') {
+                            // support shorthand like: timeline -52
+                            if num.chars().all(|c| c.is_ascii_digit()) {
+                                if let Ok(v) = num.parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                            }
+                        }
+                        i += 1;
+                    }
+                    Commands::Timeline { weeks, color }
+                }
+            }
+            "heatmap" => {
+                if has_flag(&args[2..], "-h") || has_flag(&args[2..], "--help") {
+                    Commands::Help { topic: HelpTopic::Heatmap }
+                } else {
+                    let mut weeks: Option<usize> = None;
+                    // Default: color ON. Allow disabling with --no-color
+                    let mut color = true;
+
+                    let rest = &args[2..];
+                    let mut i = 0;
+                    while i < rest.len() {
+                        let a = &rest[i];
+                        if a == "--weeks" {
+                            if i + 1 < rest.len() {
+                                if let Ok(v) = rest[i + 1].parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                                i += 1;
+                            }
+                        } else if let Some(eq) = a.strip_prefix("--weeks=") {
+                            if let Ok(v) = eq.parse::<usize>() {
+                                weeks = Some(v);
+                            }
+                        } else if a == "--color" || a == "-c" {
+                            color = true;
+                        } else if a == "--no-color" {
+                            color = false;
+                        } else if let Some(num) = a.strip_prefix("--") {
+                            // support shorthand like: heatmap --60 (weeks)
+                            if num.chars().all(|c| c.is_ascii_digit()) {
+                                if let Ok(v) = num.parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                            }
+                        } else if let Some(num) = a.strip_prefix('-') {
+                            // support shorthand like: heatmap -60 (weeks)
+                            if num.chars().all(|c| c.is_ascii_digit()) {
+                                if let Ok(v) = num.parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                            }
+                        }
+                        i += 1;
+                    }
+                    Commands::Heatmap { weeks, color }
+                }
+            }
             _ => {
                 return Err(format!(
                     "Unknown command: {}\n{}",
@@ -167,6 +265,8 @@ USAGE:
 COMMANDS:
   stats           Show repository stats (surviving LOC, commits, files)
   json            Export stats to git-insights.json
+  timeline        Show weekly commit activity as ASCII/Unicode sparkline
+  heatmap         Show UTC commit heatmap (weekday x hour)
   user <name>     Show insights for a specific user
   help            Show this help
   version         Show version information
@@ -248,6 +348,51 @@ EXAMPLES:
   git-insights user alice
   git-insights user alice --ownership
   git-insights user \"alice@example.com\" --ownership --by-email --top 5 --sort pct"
+                .to_string()
+        }
+        HelpTopic::Timeline => {
+            "\
+git-insights timeline
+
+Show weekly commit activity as a multi-row sparkline (ASCII/Unicode).
+Color output is ON by default; use --no-color to disable.
+
+USAGE:
+  git-insights timeline [--weeks N|--NN|-NN] [--no-color] [-c|--color]
+
+OPTIONS:
+  --weeks N     Number of weeks to display (default: 26). Shorthand: --52 or -52
+  -c, --color   Force ANSI colors (default: ON)
+  --no-color    Disable ANSI colors
+  -h, --help    Show this help
+
+EXAMPLES:
+  git-insights timeline
+  git-insights timeline --weeks 12
+  git-insights timeline --52
+  git-insights timeline -52 --no-color"
+                .to_string()
+        }
+        HelpTopic::Heatmap => {
+            "\
+git-insights heatmap
+
+Show a UTC commit heatmap (weekday x hour).
+Color output is ON by default; use --no-color to disable.
+
+USAGE:
+  git-insights heatmap [--weeks N|--NN|-NN] [--no-color] [-c|--color]
+
+OPTIONS:
+  --weeks N     Limit to the last N weeks (default: all history). Shorthand: --60 or -60
+  -c, --color   Force ANSI colors (default: ON)
+  --no-color    Disable ANSI colors
+  -h, --help    Show this help
+
+EXAMPLES:
+  git-insights heatmap
+  git-insights heatmap --60
+  git-insights heatmap -60 --no-color"
                 .to_string()
         }
     }
@@ -446,5 +591,98 @@ mod tests {
         let err = Cli::parse_from_args(vec!["git-insights".to_string(), "user".to_string()])
             .expect_err("Expected an error for user command without username");
         assert_eq!(err, "Usage: git-insights user <username> [--ownership] [--by-email|-e] [--top N] [--sort loc|pct]");
+    }
+
+    #[test]
+    fn test_cli_timeline_default() {
+        let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "timeline".to_string()])
+            .expect("parse");
+        match cli.command {
+            Commands::Timeline { weeks, color } => {
+                assert!(weeks.is_none());
+                assert!(color); // default color ON
+            }
+            _ => panic!("Expected Timeline command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_timeline_weeks_flags() {
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "timeline".to_string(),
+            "--weeks".to_string(),
+            "12".to_string(),
+        ]).expect("parse");
+        match cli.command {
+            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(12)); assert!(color); }
+            _ => panic!("Expected Timeline command"),
+        }
+        let cli2 = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "timeline".to_string(),
+            "--weeks=8".to_string(),
+        ]).expect("parse");
+        match cli2.command {
+            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(8)); assert!(color); }
+            _ => panic!("Expected Timeline command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_heatmap() {
+        let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "heatmap".to_string()])
+            .expect("parse");
+        match cli.command {
+            Commands::Heatmap { weeks, color } => { assert!(weeks.is_none()); assert!(color); }
+            _ => panic!("Expected Heatmap"),
+        }
+    }
+
+    #[test]
+    fn test_cli_timeline_numeric_shorthand() {
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "timeline".to_string(),
+            "--52".to_string(),
+        ]).expect("parse");
+        match cli.command {
+            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(52)); assert!(color); }
+            _ => panic!("Expected Timeline command with numeric shorthand"),
+        }
+
+        let cli_hyphen = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "timeline".to_string(),
+            "-52".to_string(),
+        ]).expect("parse");
+        match cli_hyphen.command {
+            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(52)); assert!(color); }
+            _ => panic!("Expected Timeline command with -NN shorthand"),
+        }
+    }
+
+    #[test]
+    fn test_cli_heatmap_weeks_and_color() {
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "heatmap".to_string(),
+            "--60".to_string(),
+            "--color".to_string(),
+        ]).expect("parse");
+        match cli.command {
+            Commands::Heatmap { weeks, color } => { assert_eq!(weeks, Some(60)); assert!(color); }
+            _ => panic!("Expected Heatmap with weeks+color"),
+        }
+
+        let cli_hyphen = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "heatmap".to_string(),
+            "-60".to_string(),
+        ]).expect("parse");
+        match cli_hyphen.command {
+            Commands::Heatmap { weeks, color } => { assert_eq!(weeks, Some(60)); assert!(color); }
+            _ => panic!("Expected Heatmap with -NN shorthand"),
+        }
     }
 }
