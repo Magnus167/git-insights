@@ -448,6 +448,7 @@ pub fn run_timeline_with_options(weeks: usize, color: bool) -> Result<(), String
     println!("Y-axis: commits/week (max={}, mid≈{})", max, mid);
     if color { print!("\x1b[0m"); }
     print_ramp_legend(color, "commits/week");
+    println!();
     // Default to a 7-line tall chart for better readability without flooding the screen
     render_timeline_multiline(&counts, 7, color);
     // Add axis reference (minor tick=4 weeks, major tick=12 weeks)
@@ -486,6 +487,7 @@ pub fn run_heatmap_with_options(weeks: Option<usize>, color: bool) -> Result<(),
     println!("Calendar heatmap (UTC) — rows: Sun..Sat, cols: weeks (old→new), unit: commits/day, window: last {} weeks, max={}", w, max);
     if color { print!("\x1b[0m"); }
     print_ramp_legend(color, "commits/day");
+    println!();
 
     if color {
         render_calendar_heatmap_colored(&grid);
