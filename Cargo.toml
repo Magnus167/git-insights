@@ -1,6 +1,6 @@
 [package]
 name = "git-insights"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 description = "A CLI tool to generate Git repo stats and insights."
 license = "MIT"
