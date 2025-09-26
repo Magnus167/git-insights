@@ -120,7 +120,7 @@ pub fn render_heatmap_ascii(grid: [[usize; 24]; 7]) {
             }
         }
     }
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
     let labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (r, lbl) in labels.iter().enumerate() {
         print!("{:<3} ", lbl);
@@ -132,12 +132,12 @@ pub fn render_heatmap_ascii(grid: [[usize; 24]; 7]) {
                 let idx = (c.saturating_mul(ramp.len() - 1)) / max;
                 ramp[idx] as char
             };
-            print!(" {}", ch);
+            print!(" {} ", ch);
         }
         println!();
     }
     // Bottom hour axis for reference
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
 }
 
 /// Render GitHub-style calendar heatmap (ASCII ramp)
@@ -163,19 +163,19 @@ pub fn render_calendar_heatmap_ascii(grid: &[Vec<usize>]) {
                 let idx = (v.saturating_mul(ramp.len() - 1)) / max;
                 ramp[idx] as char
             };
-            print!(" {}", ch);
+            print!(" {} ", ch);
         }
         println!();
     }
     // bottom reference: week columns count
-    print!("     ");
+    print!("    ");
     for _ in 0..grid[0].len() {
-        print!("^");
+        print!("^  ");
     }
     println!();
 }
 
-fn color_for_level(level: usize) -> &'static str {
+pub fn color_for_level(level: usize) -> &'static str {
     // Simple 6-step ANSI 8-color ramp (foreground)
     match level {
         0 => "\x1b[90m", // bright black / low intensity
@@ -188,8 +188,66 @@ fn color_for_level(level: usize) -> &'static str {
 }
 const ANSI_RESET: &str = "\x1b[0m";
 
+/// Map a value in [0..=max] into an intensity index 0..=levels-1.
+/// 0 stays 0 (blank); any non-zero maps to at least 1 to ensure visible shading.
+fn intensity_index(v: usize, max: usize, levels: usize) -> usize {
+    if max == 0 || v == 0 || levels <= 1 {
+        return 0;
+    }
+    let l = levels - 1;
+    let idx = ((v - 1) * l) / max + 1;
+    idx.min(l)
+}
+
+/// Rich color palette (12 steps) for smoother gradients.
+/// Only call for non-zero intensity (idx >= 1). idx range: 0..=levels-1
+fn color_for_level_rich(idx: usize, levels: usize) -> &'static str {
+    // 12-color ramp from dim through cool to warm hues.
+    // Using standard ANSI codes (widely supported); bright/dim variants to increase steps.
+    const PALETTE: [&str; 12] = [
+        "\x1b[90m", // 0: dim (should not be used for non-zero, but safe fallback)
+        "\x1b[34m", // blue
+        "\x1b[94m", // bright blue
+        "\x1b[36m", // cyan
+        "\x1b[96m", // bright cyan
+        "\x1b[32m", // green
+        "\x1b[92m", // bright green
+        "\x1b[33m", // yellow
+        "\x1b[93m", // bright yellow
+        "\x1b[35m", // magenta
+        "\x1b[95m", // bright magenta
+        "\x1b[91m", // bright red
+    ];
+    let n = PALETTE.len();
+    if levels <= 1 {
+        return PALETTE[0];
+    }
+    // Scale idx (0..levels-1) into PALETTE indices (0..n-1)
+    let k = if idx >= levels - 1 { n - 1 } else { (idx * (n - 1)) / (levels - 1) };
+    PALETTE[k]
+}
+
+/// Print a color/ASCII legend using richer palette for color.
+fn print_ramp_legend_rich(color: bool, unit: &str) {
+    if color {
+        print!("\x1b[90mLegend (low→high, blank=0 {}):\x1b[0m ", unit);
+        let levels = 10;
+        for lvl in 1..levels {
+            let code = color_for_level_rich(lvl, levels);
+            print!(" {}█{}", code, ANSI_RESET);
+        }
+        println!();
+    } else {
+        let ramp = " .:-=+*#%@";
+        println!(
+            "Legend (low→high, blank=' ' 0 {}): {}",
+            unit, ramp
+        );
+    }
+}
+
 /// Print a color/ASCII legend showing low→high intensity and the meaning of blank.
-fn print_ramp_legend(color: bool, unit: &str) {
+pub fn print_ramp_legend(color: bool, unit: &str) {
     if color {
         // Levels 1..5 colored blocks; blank = 0
         print!("\x1b[90mLegend (low→high, blank=0 {}):\x1b[0m ", unit);
@@ -206,6 +264,10 @@ fn print_ramp_legend(color: bool, unit: &str) {
     }
 }
 
+/// Build a left-aligned hour axis for 24 columns with fixed per-column width.
+/// indent: spaces before the first column (row label width = 3 + 1 space -> 4)
+/// cell_w: visible width of each column (we use 3: two glyphs + one spacer)
+
 /// Render timeline as Unicode bars with optional color.
 /// Uses unicode ramp " ▁▂▃▄▅▆▇█" (9 levels) + color ramp.
 pub fn render_timeline_bars_colored(counts: &[usize], color: bool) {
@@ -221,10 +283,14 @@ pub fn render_timeline_bars_colored(counts: &[usize], color: bool) {
     }
     let mut out = String::with_capacity(counts.len() * 6);
     for &c in counts {
-        let idx = (c.saturating_mul(ramp.len() - 1)) / max; // 0..=8
-        // map intensity 0..=8 to 0..=5 color levels
-        let color_level = if idx == 0 { 0 } else { ((idx - 1) * 5) / (ramp.len() - 2) };
-        out.push_str(color_for_level(color_level));
+        let idx = (c.saturating_mul(ramp.len() - 1)) / max; // 0..=8 (shape)
+        // richer color levels; any non-zero count gets at least level 1
+        let shade = intensity_index(c, max, 10);
+        if shade == 0 {
+            out.push_str("\x1b[90m");
+        } else {
+            out.push_str(color_for_level_rich(shade, 10));
+        }
         out.push(ramp[idx]);
     }
     out.push_str(ANSI_RESET);
@@ -291,9 +357,9 @@ pub fn render_timeline_multiline(counts: &[usize], height: usize, color: bool) {
             let filled = ((c as usize) * h + max - 1) / max; // ceil to 1..=h
             if filled >= row {
                 if color {
-                    // map count to 0..=5 color level
-                    let idx = if c == 0 { 0 } else { ((c - 1) as usize * 5) / max + 1 };
-                    bars.push_str(color_for_level(idx));
+                    // richer color levels; any non-zero count gets at least level 1
+                    let shade = intensity_index(c, max, 10);
+                    bars.push_str(color_for_level_rich(shade, 10));
                     bars.push('█');
                 } else {
                     bars.push('#');
@@ -311,43 +377,34 @@ pub fn render_timeline_multiline(counts: &[usize], height: usize, color: bool) {
     }
 }
 
-/// Render a compact reference axis below the timeline:
-/// - Minor ticks every 4 weeks
-/// - Major ticks every 12 weeks (labeled with remaining weeks from newest: 48,36,24,12,0)
-fn render_timeline_axis(weeks: usize, color: bool) {
+///// Build timeline axis lines (ticks and labels) with explicit left padding.
+/// Left padding must match the bar chart's y-axis prefix width (label_width + 2).
+fn build_timeline_axis_lines(weeks: usize, left_pad: usize, major: char, minor: char) -> (String, String) {
     if weeks == 0 {
-        return;
+        let s = " ".repeat(left_pad);
+        return (s.clone(), s);
     }
+
     // Ticks line
     let mut ticks = vec![' '; weeks];
     for col in 0..weeks {
         // rel=0 at newest (rightmost), rel=weeks-1 at oldest (leftmost)
         let rel = weeks - 1 - col;
         if rel % 12 == 0 {
-            ticks[col] = if color { '┼' } else { '+' };
+            ticks[col] = major;
         } else if rel % 4 == 0 {
-            ticks[col] = if color { '│' } else { '|' };
+            ticks[col] = minor;
         }
     }
-    if color {
-        print!("\x1b[90m"); // dim
-    }
-    println!("{}", ticks.iter().collect::<String>());
+
     // Labels line (major ticks only). Place numbers without overlaps.
     let mut labels = vec![' '; weeks];
-    let label_color_start = if color { "\x1b[90m" } else { "" };
-    let label_color_end = if color { "\x1b[0m" } else { "" };
-
     let mut occupied = vec![false; weeks];
     for col in 0..weeks {
         let rel = weeks - 1 - col;
         if rel % 12 == 0 {
             let s = rel.to_string();
-            // avoid overlap: ensure s fits starting at `col`
-            if col + s.len() <= weeks
-                && (col..col + s.len()).all(|i| !occupied[i])
-            {
-                // write digits
+            if col + s.len() <= weeks && (col..col + s.len()).all(|i| !occupied[i]) {
                 for (i, ch) in s.chars().enumerate() {
                     labels[col + i] = ch;
                     occupied[col + i] = true;
@@ -355,10 +412,34 @@ fn render_timeline_axis(weeks: usize, color: bool) {
             }
         }
     }
-    print!("{}", label_color_start);
-    println!("{}", labels.iter().collect::<String>());
+
+    let mut ticks_line = " ".repeat(left_pad);
+    ticks_line.push_str(&ticks.iter().collect::<String>());
+
+    let mut labels_line = " ".repeat(left_pad);
+    labels_line.push_str(&labels.iter().collect::<String>());
+
+    (ticks_line, labels_line)
+}
+
+/// Render a compact reference axis below the timeline:
+/// - Minor ticks every 4 weeks
+/// - Major ticks every 12 weeks (labeled with remaining weeks from newest: 48,36,24,12,0)
+fn render_timeline_axis(weeks: usize, color: bool, left_pad: usize) {
+    if weeks == 0 {
+        return;
+    }
+    let major = if color { '┼' } else { '+' };
+    let minor = if color { '│' } else { '|' };
+    let (ticks_line, labels_line) = build_timeline_axis_lines(weeks, left_pad, major, minor);
+
     if color {
-        print!("{}", label_color_end);
+        print!("\x1b[90m"); // dim
+    }
+    println!("{}", ticks_line);
+    println!("{}", labels_line);
+    if color {
+        print!("\x1b[0m");
     }
 }
 
@@ -377,25 +458,25 @@ pub fn render_heatmap_ascii_colored(grid: [[usize; 24]; 7], color: bool) {
             }
         }
     }
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
     let labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (r, lbl) in labels.iter().enumerate() {
         print!("{:<3} ", lbl);
         for h in 0..24 {
             let c = grid[r][h];
             if max == 0 || c == 0 {
-                print!("  ");
+                print!("   ");
             } else {
-                // build 6 buckets for color
-                let idx = ((c - 1) * 5) / max + 1; // 1..=5 approx
-                let code = color_for_level(idx);
-                print!(" {}█{}", code, ANSI_RESET);
+                // richer buckets for color with guaranteed non-zero shade
+                let idx = intensity_index(c, max, 10);
+                let code = color_for_level_rich(idx, 10);
+                print!(" {}█{} ", code, ANSI_RESET);
             }
         }
         println!();
     }
     // Bottom hour axis for reference
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
 }
 
 /// Render GitHub-style calendar heatmap (colored)
@@ -415,19 +496,19 @@ pub fn render_calendar_heatmap_colored(grid: &[Vec<usize>]) {
         for c in 0..grid[0].len() {
             let v = grid[r][c];
             if max == 0 || v == 0 {
-                print!("  ");
+                print!("   ");
             } else {
-                let idx = ((v - 1) * 5) / max + 1; // 1..=5 approx
-                let code = color_for_level(idx);
-                print!(" {}█{}", code, ANSI_RESET);
+                let idx = intensity_index(v, max, 10);
+                let code = color_for_level_rich(idx, 10);
+                print!(" {}█{} ", code, ANSI_RESET);
             }
         }
         println!();
     }
     // bottom week columns
-    print!("     ");
+    print!("    ");
     for _ in 0..grid[0].len() {
-        print!("^");
+        print!("^  ");
     }
     println!();
 }
@@ -447,12 +528,14 @@ pub fn run_timeline_with_options(weeks: usize, color: bool) -> Result<(), String
     if color { print!("\x1b[90m"); }
     println!("Y-axis: commits/week (max={}, mid≈{})", max, mid);
     if color { print!("\x1b[0m"); }
-    print_ramp_legend(color, "commits/week");
+    print_ramp_legend_rich(color, "commits/week");
     println!();
     // Default to a 7-line tall chart for better readability without flooding the screen
     render_timeline_multiline(&counts, 7, color);
-    // Add axis reference (minor tick=4 weeks, major tick=12 weeks)
-    render_timeline_axis(weeks, color);
+    // Add axis reference (minor tick=4 weeks, major tick=12 weeks), aligned to the bars' left prefix
+    let label_width = max.to_string().len().max(3);
+    let left_pad = label_width + 2; // "{label:>width$} {axis}"
+    render_timeline_axis(weeks, color, left_pad);
     Ok(())
 }
 
@@ -486,7 +569,7 @@ pub fn run_heatmap_with_options(weeks: Option<usize>, color: bool) -> Result<(),
     if color { print!("\x1b[90m"); }
     println!("Calendar heatmap (UTC) — rows: Sun..Sat, cols: weeks (old→new), unit: commits/day, window: last {} weeks, max={}", w, max);
     if color { print!("\x1b[0m"); }
-    print_ramp_legend(color, "commits/day");
+    print_ramp_legend_rich(color, "commits/day");
     println!();
 
     if color {
@@ -511,9 +594,8 @@ mod tests {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::time::{SystemTime, UNIX_EPOCH};
-    use std::sync::{Mutex, OnceLock, MutexGuard};
+    use std::sync::MutexGuard;
 
-    static TEST_DIR_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     // Simple temp repo that lives under OS temp dir and is cleaned up on Drop.
     struct TempRepo {
@@ -525,10 +607,7 @@ mod tests {
     impl TempRepo {
         fn new(prefix: &str) -> Self {
             // Serialize temp repo creation and chdir to avoid races across parallel tests
-            let guard = TEST_DIR_LOCK
-                .get_or_init(|| Mutex::new(()))
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let guard = crate::test_sync::test_lock();
 
             let old_dir = env::current_dir().unwrap();
             let base = env::temp_dir();
@@ -716,7 +795,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_collect_commit_timestamps_from_temp_repo() {
         // Create one temp repo and keep it the current working directory
         // while collecting timestamps.
@@ -736,7 +814,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_run_timeline_and_heatmap_end_to_end() {
         // Create a repo and ensure both runners do not error.
         let repo = TempRepo::new("git-insights-vis-run");
@@ -803,5 +880,81 @@ mod tests {
     fn test_print_legends_no_panic() {
         super::print_ramp_legend(false, "commits/week");
         super::print_ramp_legend(true, "commits/day");
+    }
+
+    #[test]
+    fn test_build_timeline_axis_lines_alignment() {
+        // Weeks = 24 -> major ticks at rel=12 (col=11) and rel=0 (col=23)
+        let weeks = 24usize;
+        let left_pad = 5usize;
+        let (ticks, labels) = super::build_timeline_axis_lines(weeks, left_pad, '+', '|');
+
+        // Left padding present and lengths correct
+        assert!(ticks.starts_with(&" ".repeat(left_pad)));
+        assert!(labels.starts_with(&" ".repeat(left_pad)));
+        assert_eq!(ticks.len(), left_pad + weeks);
+        assert_eq!(labels.len(), left_pad + weeks);
+
+        let t_body = &ticks[left_pad..];
+        let l_body = &labels[left_pad..];
+
+        // Verify tick characters at expected positions
+        for (col, tc) in t_body.chars().enumerate() {
+            let rel = weeks - 1 - col;
+            let expected = if rel % 12 == 0 {
+                '+'
+            } else if rel % 4 == 0 {
+                '|'
+            } else {
+                ' '
+            };
+            assert_eq!(tc, expected, "tick mismatch at col {}", col);
+        }
+
+        // Verify labels placed at major ticks without overlap
+        // For 24 weeks, we expect "12" at col 11 and "0" at col 23
+        assert_eq!(&l_body[11..13], "12");
+        assert_eq!(&l_body[23..24], "0");
+        for col in 0..weeks {
+            if !(11..13).contains(&col) && col != 23 {
+                assert_eq!(l_body.chars().nth(col).unwrap(), ' ');
+            }
+        }
+    }
+
+    #[test]
+    fn test_timeline_axis_alignment_with_temp_repo() {
+        // Integration-style check using a real temp git repo and our git collector.
+        let _repo = TempRepo::new("git-insights-vis-axis");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create two commits: one in current week and one in previous week (UTC).
+        const DAY: u64 = 86_400;
+        let today_midnight = now - (now % DAY);
+        let prev_week_same_day = today_midnight.saturating_sub(8 * DAY);
+
+        _repo.commit_with_epoch("Alice", "alice@example.com", "axis.txt", "a\n", today_midnight);
+        _repo.commit_with_epoch("Bob", "bob@example.com", "axis.txt", "b\n", prev_week_same_day);
+
+        // Collect via our git path and compute bins.
+        let ts = collect_commit_timestamps().expect("collect timestamps");
+        let weeks = 8usize;
+        let counts = compute_timeline_weeks(&ts, weeks, now);
+
+        // Determine left padding as used by the chart and build axis lines.
+        let max = counts.iter().copied().max().unwrap_or(0);
+        let label_width = max.to_string().len().max(3);
+        let left_pad = label_width + 2;
+
+        let (ticks, labels) = super::build_timeline_axis_lines(weeks, left_pad, '+', '|');
+
+        // Basic alignment checks: the axis lines must include the same left padding as the bars.
+        assert!(ticks.starts_with(&" ".repeat(left_pad)));
+        assert!(labels.starts_with(&" ".repeat(left_pad)));
+        assert_eq!(ticks.len(), left_pad + weeks);
+        assert_eq!(labels.len(), left_pad + weeks);
     }
 }

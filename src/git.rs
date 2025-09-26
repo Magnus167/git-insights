@@ -70,6 +70,8 @@ mod tests {
 
     #[test]
     fn test_is_in_git_repo() {
+        // Serialize with other tests that may temporarily chdir to temp repos
+        let _guard = crate::test_sync::test_lock();
         // This test will pass because the project is a git repository
         assert!(is_in_git_repo());
     }

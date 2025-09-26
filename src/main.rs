@@ -7,6 +7,7 @@ use git_insights::{
         get_user_file_ownership,
     },
     visualize::{run_timeline_with_options, run_heatmap_with_options},
+    code_frequency::{run_code_frequency_with_options, Group, HeatmapKind},
 };
 use std::fs::File;
 use std::io::Write;
@@ -81,6 +82,31 @@ fn main() {
         }
         Commands::Heatmap { weeks, color } => {
             if let Err(e) = run_heatmap_with_options(*weeks, *color) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+            let parsed_heatmap = match heatmap.as_deref() {
+                Some("dow-hod") => Some(HeatmapKind::DowByHod),
+                Some("dom-hod") => Some(HeatmapKind::DomByHod),
+                Some(other) => {
+                    eprintln!("Error: unknown --heatmap '{}'. Expected dow-hod|dom-hod.", other);
+                    std::process::exit(1);
+                }
+                None => None,
+            };
+            let parsed_group = match group.as_deref() {
+                Some("hod") => Some(Group::HourOfDay),
+                Some("dow") => Some(Group::DayOfWeek),
+                Some("dom") => Some(Group::DayOfMonth),
+                Some(other) => {
+                    eprintln!("Error: unknown --group '{}'. Expected hod|dow|dom.", other);
+                    std::process::exit(1);
+                }
+                None => None,
+            };
+            if let Err(e) = run_code_frequency_with_options(parsed_group, parsed_heatmap, *weeks, *color, *table) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
