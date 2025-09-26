@@ -373,43 +373,34 @@ pub fn render_timeline_multiline(counts: &[usize], height: usize, color: bool) {
     }
 }
 
-/// Render a compact reference axis below the timeline:
-/// - Minor ticks every 4 weeks
-/// - Major ticks every 12 weeks (labeled with remaining weeks from newest: 48,36,24,12,0)
-fn render_timeline_axis(weeks: usize, color: bool) {
+///// Build timeline axis lines (ticks and labels) with explicit left padding.
+/// Left padding must match the bar chart's y-axis prefix width (label_width + 2).
+fn build_timeline_axis_lines(weeks: usize, left_pad: usize, major: char, minor: char) -> (String, String) {
     if weeks == 0 {
-        return;
+        let s = " ".repeat(left_pad);
+        return (s.clone(), s);
     }
+
     // Ticks line
     let mut ticks = vec![' '; weeks];
     for col in 0..weeks {
         // rel=0 at newest (rightmost), rel=weeks-1 at oldest (leftmost)
         let rel = weeks - 1 - col;
         if rel % 12 == 0 {
-            ticks[col] = if color { '┼' } else { '+' };
+            ticks[col] = major;
         } else if rel % 4 == 0 {
-            ticks[col] = if color { '│' } else { '|' };
+            ticks[col] = minor;
         }
     }
-    if color {
-        print!("\x1b[90m"); // dim
-    }
-    println!("{}", ticks.iter().collect::<String>());
+
     // Labels line (major ticks only). Place numbers without overlaps.
     let mut labels = vec![' '; weeks];
-    let label_color_start = if color { "\x1b[90m" } else { "" };
-    let label_color_end = if color { "\x1b[0m" } else { "" };
-
     let mut occupied = vec![false; weeks];
     for col in 0..weeks {
         let rel = weeks - 1 - col;
         if rel % 12 == 0 {
             let s = rel.to_string();
-            // avoid overlap: ensure s fits starting at `col`
-            if col + s.len() <= weeks
-                && (col..col + s.len()).all(|i| !occupied[i])
-            {
-                // write digits
+            if col + s.len() <= weeks && (col..col + s.len()).all(|i| !occupied[i]) {
                 for (i, ch) in s.chars().enumerate() {
                     labels[col + i] = ch;
                     occupied[col + i] = true;
@@ -417,10 +408,34 @@ fn render_timeline_axis(weeks: usize, color: bool) {
             }
         }
     }
-    print!("{}", label_color_start);
-    println!("{}", labels.iter().collect::<String>());
+
+    let mut ticks_line = " ".repeat(left_pad);
+    ticks_line.push_str(&ticks.iter().collect::<String>());
+
+    let mut labels_line = " ".repeat(left_pad);
+    labels_line.push_str(&labels.iter().collect::<String>());
+
+    (ticks_line, labels_line)
+}
+
+/// Render a compact reference axis below the timeline:
+/// - Minor ticks every 4 weeks
+/// - Major ticks every 12 weeks (labeled with remaining weeks from newest: 48,36,24,12,0)
+fn render_timeline_axis(weeks: usize, color: bool, left_pad: usize) {
+    if weeks == 0 {
+        return;
+    }
+    let major = if color { '┼' } else { '+' };
+    let minor = if color { '│' } else { '|' };
+    let (ticks_line, labels_line) = build_timeline_axis_lines(weeks, left_pad, major, minor);
+
     if color {
-        print!("{}", label_color_end);
+        print!("\x1b[90m"); // dim
+    }
+    println!("{}", ticks_line);
+    println!("{}", labels_line);
+    if color {
+        print!("\x1b[0m");
     }
 }
 
@@ -513,8 +528,10 @@ pub fn run_timeline_with_options(weeks: usize, color: bool) -> Result<(), String
     println!();
     // Default to a 7-line tall chart for better readability without flooding the screen
     render_timeline_multiline(&counts, 7, color);
-    // Add axis reference (minor tick=4 weeks, major tick=12 weeks)
-    render_timeline_axis(weeks, color);
+    // Add axis reference (minor tick=4 weeks, major tick=12 weeks), aligned to the bars' left prefix
+    let label_width = max.to_string().len().max(3);
+    let left_pad = label_width + 2; // "{label:>width$} {axis}"
+    render_timeline_axis(weeks, color, left_pad);
     Ok(())
 }
 
@@ -865,5 +882,81 @@ mod tests {
     fn test_print_legends_no_panic() {
         super::print_ramp_legend(false, "commits/week");
         super::print_ramp_legend(true, "commits/day");
+    }
+
+    #[test]
+    fn test_build_timeline_axis_lines_alignment() {
+        // Weeks = 24 -> major ticks at rel=12 (col=11) and rel=0 (col=23)
+        let weeks = 24usize;
+        let left_pad = 5usize;
+        let (ticks, labels) = super::build_timeline_axis_lines(weeks, left_pad, '+', '|');
+
+        // Left padding present and lengths correct
+        assert!(ticks.starts_with(&" ".repeat(left_pad)));
+        assert!(labels.starts_with(&" ".repeat(left_pad)));
+        assert_eq!(ticks.len(), left_pad + weeks);
+        assert_eq!(labels.len(), left_pad + weeks);
+
+        let t_body = &ticks[left_pad..];
+        let l_body = &labels[left_pad..];
+
+        // Verify tick characters at expected positions
+        for (col, tc) in t_body.chars().enumerate() {
+            let rel = weeks - 1 - col;
+            let expected = if rel % 12 == 0 {
+                '+'
+            } else if rel % 4 == 0 {
+                '|'
+            } else {
+                ' '
+            };
+            assert_eq!(tc, expected, "tick mismatch at col {}", col);
+        }
+
+        // Verify labels placed at major ticks without overlap
+        // For 24 weeks, we expect "12" at col 11 and "0" at col 23
+        assert_eq!(&l_body[11..13], "12");
+        assert_eq!(&l_body[23..24], "0");
+        for col in 0..weeks {
+            if !(11..13).contains(&col) && col != 23 {
+                assert_eq!(l_body.chars().nth(col).unwrap(), ' ');
+            }
+        }
+    }
+
+    #[test]
+    fn test_timeline_axis_alignment_with_temp_repo() {
+        // Integration-style check using a real temp git repo and our git collector.
+        let _repo = TempRepo::new("git-insights-vis-axis");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create two commits: one in current week and one in previous week (UTC).
+        const DAY: u64 = 86_400;
+        let today_midnight = now - (now % DAY);
+        let prev_week_same_day = today_midnight.saturating_sub(8 * DAY);
+
+        _repo.commit_with_epoch("Alice", "alice@example.com", "axis.txt", "a\n", today_midnight);
+        _repo.commit_with_epoch("Bob", "bob@example.com", "axis.txt", "b\n", prev_week_same_day);
+
+        // Collect via our git path and compute bins.
+        let ts = collect_commit_timestamps().expect("collect timestamps");
+        let weeks = 8usize;
+        let counts = compute_timeline_weeks(&ts, weeks, now);
+
+        // Determine left padding as used by the chart and build axis lines.
+        let max = counts.iter().copied().max().unwrap_or(0);
+        let label_width = max.to_string().len().max(3);
+        let left_pad = label_width + 2;
+
+        let (ticks, labels) = super::build_timeline_axis_lines(weeks, left_pad, '+', '|');
+
+        // Basic alignment checks: the axis lines must include the same left padding as the bars.
+        assert!(ticks.starts_with(&" ".repeat(left_pad)));
+        assert!(labels.starts_with(&" ".repeat(left_pad)));
+        assert_eq!(ticks.len(), left_pad + weeks);
+        assert_eq!(labels.len(), left_pad + weeks);
     }
 }
