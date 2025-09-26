@@ -4,3 +4,4 @@ pub mod output;
 pub mod stats;
 pub mod visualize;
 pub mod code_frequency;
+pub mod test_sync;
