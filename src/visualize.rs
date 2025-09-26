@@ -77,14 +77,14 @@ pub fn compute_calendar_heatmap(timestamps: &[u64], weeks: usize, now: u64) -> V
         if t > aligned_end || t < min_ts {
             continue;
         }
-        let day_index = (aligned_end - t) / DAY;      // 0.. spanning days
-        let week_off = (day_index / 7) as usize;      // 0 = current week
+        let day_index = (aligned_end - t) / DAY; // 0.. spanning days
+        let week_off = (day_index / 7) as usize; // 0 = current week
         if week_off >= weeks {
             continue;
         }
-        let col = weeks - 1 - week_off;               // oldest..newest left->right
+        let col = weeks - 1 - week_off; // oldest..newest left->right
         let day = t / DAY;
-        let weekday = ((day + 4) % 7) as usize;       // 0=Sun..6=Sat
+        let weekday = ((day + 4) % 7) as usize; // 0=Sun..6=Sat
         grid[weekday][col] += 1;
     }
     grid
@@ -111,7 +111,7 @@ pub fn render_timeline_bars(counts: &[usize]) {
 /// Header shows hours 00..23; each cell is a character denoting relative intensity.
 pub fn render_heatmap_ascii(grid: [[usize; 24]; 7]) {
     let ramp: &[u8] = b" .:-=+*#%@"; // 10 levels
-    // Find global max for scaling
+                                     // Find global max for scaling
     let mut max = 0usize;
     for r in 0..7 {
         for h in 0..24 {
@@ -143,7 +143,7 @@ pub fn render_heatmap_ascii(grid: [[usize; 24]; 7]) {
 /// Render GitHub-style calendar heatmap (ASCII ramp)
 pub fn render_calendar_heatmap_ascii(grid: &[Vec<usize>]) {
     let ramp: &[u8] = b" .:-=+*#%@"; // 10 levels
-    // global max
+                                     // global max
     let mut max = 0usize;
     for r in 0..7 {
         for c in 0..grid[0].len() {
@@ -223,7 +223,11 @@ fn color_for_level_rich(idx: usize, levels: usize) -> &'static str {
         return PALETTE[0];
     }
     // Scale idx (0..levels-1) into PALETTE indices (0..n-1)
-    let k = if idx >= levels - 1 { n - 1 } else { (idx * (n - 1)) / (levels - 1) };
+    let k = if idx >= levels - 1 {
+        n - 1
+    } else {
+        (idx * (n - 1)) / (levels - 1)
+    };
     PALETTE[k]
 }
 
@@ -239,10 +243,7 @@ fn print_ramp_legend_rich(color: bool, unit: &str) {
         println!();
     } else {
         let ramp = " .:-=+*#%@";
-        println!(
-            "Legend (low→high, blank=' ' 0 {}): {}",
-            unit, ramp
-        );
+        println!("Legend (low→high, blank=' ' 0 {}): {}", unit, ramp);
     }
 }
 
@@ -257,10 +258,7 @@ pub fn print_ramp_legend(color: bool, unit: &str) {
         println!();
     } else {
         let ramp = " .:-=+*#%@";
-        println!(
-            "Legend (low→high, blank=' ' 0 {}): {}",
-            unit, ramp
-        );
+        println!("Legend (low→high, blank=' ' 0 {}): {}", unit, ramp);
     }
 }
 
@@ -284,7 +282,7 @@ pub fn render_timeline_bars_colored(counts: &[usize], color: bool) {
     let mut out = String::with_capacity(counts.len() * 6);
     for &c in counts {
         let idx = (c.saturating_mul(ramp.len() - 1)) / max; // 0..=8 (shape)
-        // richer color levels; any non-zero count gets at least level 1
+                                                            // richer color levels; any non-zero count gets at least level 1
         let shade = intensity_index(c, max, 10);
         if shade == 0 {
             out.push_str("\x1b[90m");
@@ -344,7 +342,12 @@ pub fn render_timeline_multiline(counts: &[usize], height: usize, color: bool) {
                 if color {
                     line.push_str(dim_start);
                 }
-                line.push_str(&format!("{:>width$} {}", "", axis_char, width = label_width));
+                line.push_str(&format!(
+                    "{:>width$} {}",
+                    "",
+                    axis_char,
+                    width = label_width
+                ));
                 if color {
                     line.push_str(dim_end);
                 }
@@ -379,7 +382,12 @@ pub fn render_timeline_multiline(counts: &[usize], height: usize, color: bool) {
 
 ///// Build timeline axis lines (ticks and labels) with explicit left padding.
 /// Left padding must match the bar chart's y-axis prefix width (label_width + 2).
-fn build_timeline_axis_lines(weeks: usize, left_pad: usize, major: char, minor: char) -> (String, String) {
+fn build_timeline_axis_lines(
+    weeks: usize,
+    left_pad: usize,
+    major: char,
+    minor: char,
+) -> (String, String) {
     if weeks == 0 {
         let s = " ".repeat(left_pad);
         return (s.clone(), s);
@@ -525,9 +533,13 @@ pub fn run_timeline_with_options(weeks: usize, color: bool) -> Result<(), String
     // Print Y-axis unit/scale reference
     let max = counts.iter().copied().max().unwrap_or(0);
     let mid = (max + 1) / 2;
-    if color { print!("\x1b[90m"); }
+    if color {
+        print!("\x1b[90m");
+    }
     println!("Y-axis: commits/week (max={}, mid≈{})", max, mid);
-    if color { print!("\x1b[0m"); }
+    if color {
+        print!("\x1b[0m");
+    }
     print_ramp_legend_rich(color, "commits/week");
     println!();
     // Default to a 7-line tall chart for better readability without flooding the screen
@@ -543,7 +555,6 @@ pub fn run_timeline_with_options(weeks: usize, color: bool) -> Result<(), String
 pub fn run_timeline(weeks: usize) -> Result<(), String> {
     run_timeline_with_options(weeks, false)
 }
-
 
 /// Run the heatmap visualization with options.
 pub fn run_heatmap_with_options(weeks: Option<usize>, color: bool) -> Result<(), String> {
@@ -566,9 +577,13 @@ pub fn run_heatmap_with_options(weeks: Option<usize>, color: bool) -> Result<(),
             }
         }
     }
-    if color { print!("\x1b[90m"); }
+    if color {
+        print!("\x1b[90m");
+    }
     println!("Calendar heatmap (UTC) — rows: Sun..Sat, cols: weeks (old→new), unit: commits/day, window: last {} weeks, max={}", w, max);
-    if color { print!("\x1b[0m"); }
+    if color {
+        print!("\x1b[0m");
+    }
     print_ramp_legend_rich(color, "commits/day");
     println!();
 
@@ -593,9 +608,8 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
-    use std::time::{SystemTime, UNIX_EPOCH};
     use std::sync::MutexGuard;
-
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     // Simple temp repo that lives under OS temp dir and is cleaned up on Drop.
     struct TempRepo {
@@ -619,52 +633,42 @@ mod tests {
             fs::create_dir_all(&path).unwrap();
             env::set_current_dir(&path).unwrap();
 
-            assert!(
-                Command::new("git")
-                    .args(["--no-pager", "init", "-q"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            assert!(Command::new("git")
+                .args(["--no-pager", "init", "-q"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
             // Keep commands clean
-            assert!(
-                Command::new("git")
-                    .args(["config", "commit.gpgsign", "false"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-            assert!(
-                Command::new("git")
-                    .args(["config", "core.hooksPath", "/dev/null"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-            assert!(
-                Command::new("git")
-                    .args(["config", "user.name", "Test"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-            assert!(
-                Command::new("git")
-                    .args(["config", "user.email", "test@example.com"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            assert!(Command::new("git")
+                .args(["config", "commit.gpgsign", "false"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .args(["config", "core.hooksPath", "/dev/null"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .args(["config", "user.name", "Test"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .args(["config", "user.email", "test@example.com"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
 
             // Initial file and commit (for a valid repo)
             fs::write("INIT", "init\n").unwrap();
@@ -689,7 +693,11 @@ mod tests {
             c.stdout(Stdio::null()).stderr(Stdio::null());
             assert!(c.status().unwrap().success());
 
-            Self { _guard: guard, old_dir, path }
+            Self {
+                _guard: guard,
+                old_dir,
+                path,
+            }
         }
 
         fn commit_with_epoch(&self, name: &str, email: &str, file: &str, content: &str, ts: u64) {
@@ -774,9 +782,9 @@ mod tests {
         // 1970-01-05 05:00:00 UTC Monday 05h -> day=4 -> ((4+4)%7)=1 (Mon)
         let mon_05 = 4 * 86_400 + 5 * 3_600;
         let grid = compute_heatmap_utc(&[sun_00, sun_13, mon_05]);
-        assert_eq!(grid[0][0], 1);  // Sun 00
+        assert_eq!(grid[0][0], 1); // Sun 00
         assert_eq!(grid[0][13], 1); // Sun 13
-        assert_eq!(grid[1][5], 1);  // Mon 05
+        assert_eq!(grid[1][5], 1); // Mon 05
     }
 
     #[test]
@@ -936,8 +944,20 @@ mod tests {
         let today_midnight = now - (now % DAY);
         let prev_week_same_day = today_midnight.saturating_sub(8 * DAY);
 
-        _repo.commit_with_epoch("Alice", "alice@example.com", "axis.txt", "a\n", today_midnight);
-        _repo.commit_with_epoch("Bob", "bob@example.com", "axis.txt", "b\n", prev_week_same_day);
+        _repo.commit_with_epoch(
+            "Alice",
+            "alice@example.com",
+            "axis.txt",
+            "a\n",
+            today_midnight,
+        );
+        _repo.commit_with_epoch(
+            "Bob",
+            "bob@example.com",
+            "axis.txt",
+            "b\n",
+            prev_week_same_day,
+        );
 
         // Collect via our git path and compute bins.
         let ts = collect_commit_timestamps().expect("collect timestamps");
