@@ -6,6 +6,7 @@ pub enum HelpTopic {
     User,
     Timeline,
     Heatmap,
+    CodeFrequency,
 }
 
 #[derive(Debug)]
@@ -15,6 +16,7 @@ pub enum Commands {
     Json,
     Timeline { weeks: Option<usize>, color: bool },
     Heatmap { weeks: Option<usize>, color: bool },
+    CodeFrequency { group: Option<String>, heatmap: Option<String>, weeks: Option<usize>, color: bool, table: bool },
     // user <username> [--ownership] [--by-email|-e] [--top N|--top=N] [--sort loc|pct|--sort=loc]
     User {
         username: String,
@@ -232,6 +234,72 @@ impl Cli {
                     Commands::Heatmap { weeks, color }
                 }
             }
+            "code-frequency" => {
+                if has_flag(&args[2..], "-h") || has_flag(&args[2..], "--help") {
+                    Commands::Help { topic: HelpTopic::CodeFrequency }
+                } else {
+                    let mut group: Option<String> = None;
+                    let mut heatmap: Option<String> = None;
+                    let mut weeks: Option<usize> = None;
+                    // Default: color ON. Allow disabling with --no-color
+                    let mut color = true;
+                    let mut table = false;
+
+                    let rest = &args[2..];
+                    let mut i = 0;
+                    while i < rest.len() {
+                        let a = &rest[i];
+                        if a == "--weeks" {
+                            if i + 1 < rest.len() {
+                                if let Ok(v) = rest[i + 1].parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                                i += 1;
+                            }
+                        } else if let Some(eq) = a.strip_prefix("--weeks=") {
+                            if let Ok(v) = eq.parse::<usize>() {
+                                weeks = Some(v);
+                            }
+                        } else if a == "--group" {
+                            if i + 1 < rest.len() {
+                                group = Some(rest[i + 1].to_lowercase());
+                                i += 1;
+                            }
+                        } else if let Some(eq) = a.strip_prefix("--group=") {
+                            group = Some(eq.to_lowercase());
+                        } else if a == "--heatmap" {
+                            if i + 1 < rest.len() {
+                                heatmap = Some(rest[i + 1].to_lowercase());
+                                i += 1;
+                            }
+                        } else if let Some(eq) = a.strip_prefix("--heatmap=") {
+                            heatmap = Some(eq.to_lowercase());
+                        } else if a == "--color" || a == "-c" {
+                            color = true;
+                        } else if a == "--no-color" {
+                            color = false;
+                        } else if a == "--table" {
+                            table = true;
+                        } else if let Some(num) = a.strip_prefix("--") {
+                            // support shorthand like: code-frequency --52 (weeks)
+                            if num.chars().all(|c| c.is_ascii_digit()) {
+                                if let Ok(v) = num.parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                            }
+                        } else if let Some(num) = a.strip_prefix('-') {
+                            // support shorthand like: code-frequency -52 (weeks)
+                            if num.chars().all(|c| c.is_ascii_digit()) {
+                                if let Ok(v) = num.parse::<usize>() {
+                                    weeks = Some(v);
+                                }
+                            }
+                        }
+                        i += 1;
+                    }
+                    Commands::CodeFrequency { group, heatmap, weeks, color, table }
+                }
+            }
             _ => {
                 return Err(format!(
                     "Unknown command: {}\n{}",
@@ -267,6 +335,7 @@ COMMANDS:
   json            Export stats to git-insights.json
   timeline        Show weekly commit activity as ASCII/Unicode sparkline
   heatmap         Show UTC commit heatmap (weekday x hour)
+  code-frequency  Code-frequency histograms/heatmaps (group by hour/day-of-week/day-of-month)
   user <name>     Show insights for a specific user
   help            Show this help
   version         Show version information
@@ -393,6 +462,47 @@ EXAMPLES:
   git-insights heatmap
   git-insights heatmap --60
   git-insights heatmap -60 --no-color"
+                .to_string()
+        }
+        HelpTopic::CodeFrequency => {
+            "\
+git-insights code-frequency
+
+Show code-frequency histograms and heatmaps derived from commit timestamps (UTC), no dependencies.
+
+Notes:
+- UTC: Hour-of-day and day-of-week are computed in UTC.
+- Windowing: When --weeks is provided, the window aligns to the end of the current week (Sun..Sat),
+  mirroring 'timeline' and 'heatmap' behavior.
+- Style/Color: Uses the same ASCII/ANSI ramps and color levels as other visualizations.
+  Disable colors with --no-color.
+
+Groupings and views:
+- Histograms: --group hod|dow|dom
+    hod = hour-of-day (00..23)
+    dow = day-of-week (Sun..Sat)
+    dom = day-of-month (01..31)
+- Heatmaps: --heatmap dow-hod|dom-hod
+    dow-hod = day-of-week x hour-of-day (7x24)
+    dom-hod = day-of-month x hour-of-day (31x24)
+
+USAGE:
+  git-insights code-frequency [--group X | --heatmap Y] [--weeks N|--NN|-NN] [--no-color] [-c|--color]
+
+OPTIONS:
+  --group X       Histogram grouping: hod|dow|dom (default: hod if no --heatmap)
+  --heatmap Y     Heatmap kind: dow-hod|dom-hod
+  --weeks N       Limit to the last N weeks (default: all history). Shorthand: --52 or -52
+  -c, --color     Force ANSI colors (default: ON)
+  --no-color      Disable ANSI colors
+  --table         Render numeric table instead of shaded chart (heatmaps and histograms)
+  -h, --help      Show this help
+
+EXAMPLES:
+  git-insights code-frequency
+  git-insights code-frequency --group dow
+  git-insights code-frequency --heatmap dow-hod --weeks 26
+  git-insights code-frequency --heatmap dom-hod -26 --no-color"
                 .to_string()
         }
     }
@@ -683,6 +793,64 @@ mod tests {
         match cli_hyphen.command {
             Commands::Heatmap { weeks, color } => { assert_eq!(weeks, Some(60)); assert!(color); }
             _ => panic!("Expected Heatmap with -NN shorthand"),
+        }
+    }
+
+    #[test]
+    fn test_cli_code_frequency_defaults_and_flags() {
+        // default: no group/heatmap -> histogram hod, color ON, weeks None
+        let cli = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "code-frequency".to_string(),
+        ]).expect("parse");
+        match cli.command {
+            Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+                assert!(group.is_none());
+                assert!(heatmap.is_none());
+                assert!(weeks.is_none());
+                assert!(color);
+                assert!(!table);
+            }
+            _ => panic!("Expected CodeFrequency"),
+        }
+
+        // group & heatmap & weeks equals-style & no-color
+        let cli2 = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "code-frequency".to_string(),
+            "--group=dom".to_string(),
+            "--heatmap".to_string(),
+            "dow-hod".to_string(),
+            "--weeks=26".to_string(),
+            "--no-color".to_string(),
+            "--table".to_string(),
+        ]).expect("parse");
+        match cli2.command {
+            Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+                assert_eq!(group.as_deref(), Some("dom"));
+                assert_eq!(heatmap.as_deref(), Some("dow-hod"));
+                assert_eq!(weeks, Some(26));
+                assert!(!color);
+                assert!(table);
+            }
+            _ => panic!("Expected CodeFrequency with flags"),
+        }
+
+        // numeric shorthand for weeks
+        let cli3 = Cli::parse_from_args(vec![
+            "git-insights".to_string(),
+            "code-frequency".to_string(),
+            "--52".to_string(),
+        ]).expect("parse");
+        match cli3.command {
+            Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+                assert!(group.is_none());
+                assert!(heatmap.is_none());
+                assert_eq!(weeks, Some(52));
+                assert!(color);
+                assert!(!table);
+            }
+            _ => panic!("Expected CodeFrequency with shorthand weeks"),
         }
     }
 }

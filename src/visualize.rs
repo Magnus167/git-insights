@@ -120,7 +120,7 @@ pub fn render_heatmap_ascii(grid: [[usize; 24]; 7]) {
             }
         }
     }
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
     let labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (r, lbl) in labels.iter().enumerate() {
         print!("{:<3} ", lbl);
@@ -132,12 +132,12 @@ pub fn render_heatmap_ascii(grid: [[usize; 24]; 7]) {
                 let idx = (c.saturating_mul(ramp.len() - 1)) / max;
                 ramp[idx] as char
             };
-            print!(" {}", ch);
+            print!(" {} ", ch);
         }
         println!();
     }
     // Bottom hour axis for reference
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
 }
 
 /// Render GitHub-style calendar heatmap (ASCII ramp)
@@ -163,19 +163,19 @@ pub fn render_calendar_heatmap_ascii(grid: &[Vec<usize>]) {
                 let idx = (v.saturating_mul(ramp.len() - 1)) / max;
                 ramp[idx] as char
             };
-            print!(" {}", ch);
+            print!(" {} ", ch);
         }
         println!();
     }
     // bottom reference: week columns count
-    print!("     ");
+    print!("    ");
     for _ in 0..grid[0].len() {
-        print!("^");
+        print!("^  ");
     }
     println!();
 }
 
-fn color_for_level(level: usize) -> &'static str {
+pub fn color_for_level(level: usize) -> &'static str {
     // Simple 6-step ANSI 8-color ramp (foreground)
     match level {
         0 => "\x1b[90m", // bright black / low intensity
@@ -188,8 +188,66 @@ fn color_for_level(level: usize) -> &'static str {
 }
 const ANSI_RESET: &str = "\x1b[0m";
 
+/// Map a value in [0..=max] into an intensity index 0..=levels-1.
+/// 0 stays 0 (blank); any non-zero maps to at least 1 to ensure visible shading.
+fn intensity_index(v: usize, max: usize, levels: usize) -> usize {
+    if max == 0 || v == 0 || levels <= 1 {
+        return 0;
+    }
+    let l = levels - 1;
+    let idx = ((v - 1) * l) / max + 1;
+    idx.min(l)
+}
+
+/// Rich color palette (12 steps) for smoother gradients.
+/// Only call for non-zero intensity (idx >= 1). idx range: 0..=levels-1
+fn color_for_level_rich(idx: usize, levels: usize) -> &'static str {
+    // 12-color ramp from dim through cool to warm hues.
+    // Using standard ANSI codes (widely supported); bright/dim variants to increase steps.
+    const PALETTE: [&str; 12] = [
+        "\x1b[90m", // 0: dim (should not be used for non-zero, but safe fallback)
+        "\x1b[34m", // blue
+        "\x1b[94m", // bright blue
+        "\x1b[36m", // cyan
+        "\x1b[96m", // bright cyan
+        "\x1b[32m", // green
+        "\x1b[92m", // bright green
+        "\x1b[33m", // yellow
+        "\x1b[93m", // bright yellow
+        "\x1b[35m", // magenta
+        "\x1b[95m", // bright magenta
+        "\x1b[91m", // bright red
+    ];
+    let n = PALETTE.len();
+    if levels <= 1 {
+        return PALETTE[0];
+    }
+    // Scale idx (0..levels-1) into PALETTE indices (0..n-1)
+    let k = if idx >= levels - 1 { n - 1 } else { (idx * (n - 1)) / (levels - 1) };
+    PALETTE[k]
+}
+
+/// Print a color/ASCII legend using richer palette for color.
+fn print_ramp_legend_rich(color: bool, unit: &str) {
+    if color {
+        print!("\x1b[90mLegend (low→high, blank=0 {}):\x1b[0m ", unit);
+        let levels = 10;
+        for lvl in 1..levels {
+            let code = color_for_level_rich(lvl, levels);
+            print!(" {}█{}", code, ANSI_RESET);
+        }
+        println!();
+    } else {
+        let ramp = " .:-=+*#%@";
+        println!(
+            "Legend (low→high, blank=' ' 0 {}): {}",
+            unit, ramp
+        );
+    }
+}
+
 /// Print a color/ASCII legend showing low→high intensity and the meaning of blank.
-fn print_ramp_legend(color: bool, unit: &str) {
+pub fn print_ramp_legend(color: bool, unit: &str) {
     if color {
         // Levels 1..5 colored blocks; blank = 0
         print!("\x1b[90mLegend (low→high, blank=0 {}):\x1b[0m ", unit);
@@ -221,10 +279,14 @@ pub fn render_timeline_bars_colored(counts: &[usize], color: bool) {
     }
     let mut out = String::with_capacity(counts.len() * 6);
     for &c in counts {
-        let idx = (c.saturating_mul(ramp.len() - 1)) / max; // 0..=8
-        // map intensity 0..=8 to 0..=5 color levels
-        let color_level = if idx == 0 { 0 } else { ((idx - 1) * 5) / (ramp.len() - 2) };
-        out.push_str(color_for_level(color_level));
+        let idx = (c.saturating_mul(ramp.len() - 1)) / max; // 0..=8 (shape)
+        // richer color levels; any non-zero count gets at least level 1
+        let shade = intensity_index(c, max, 10);
+        if shade == 0 {
+            out.push_str("\x1b[90m");
+        } else {
+            out.push_str(color_for_level_rich(shade, 10));
+        }
         out.push(ramp[idx]);
     }
     out.push_str(ANSI_RESET);
@@ -291,9 +353,9 @@ pub fn render_timeline_multiline(counts: &[usize], height: usize, color: bool) {
             let filled = ((c as usize) * h + max - 1) / max; // ceil to 1..=h
             if filled >= row {
                 if color {
-                    // map count to 0..=5 color level
-                    let idx = if c == 0 { 0 } else { ((c - 1) as usize * 5) / max + 1 };
-                    bars.push_str(color_for_level(idx));
+                    // richer color levels; any non-zero count gets at least level 1
+                    let shade = intensity_index(c, max, 10);
+                    bars.push_str(color_for_level_rich(shade, 10));
                     bars.push('█');
                 } else {
                     bars.push('#');
@@ -377,25 +439,25 @@ pub fn render_heatmap_ascii_colored(grid: [[usize; 24]; 7], color: bool) {
             }
         }
     }
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
     let labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (r, lbl) in labels.iter().enumerate() {
         print!("{:<3} ", lbl);
         for h in 0..24 {
             let c = grid[r][h];
             if max == 0 || c == 0 {
-                print!("  ");
+                print!("   ");
             } else {
-                // build 6 buckets for color
-                let idx = ((c - 1) * 5) / max + 1; // 1..=5 approx
-                let code = color_for_level(idx);
-                print!(" {}█{}", code, ANSI_RESET);
+                // richer buckets for color with guaranteed non-zero shade
+                let idx = intensity_index(c, max, 10);
+                let code = color_for_level_rich(idx, 10);
+                print!(" {}█{} ", code, ANSI_RESET);
             }
         }
         println!();
     }
     // Bottom hour axis for reference
-    println!("     00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23");
+    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
 }
 
 /// Render GitHub-style calendar heatmap (colored)
@@ -415,19 +477,19 @@ pub fn render_calendar_heatmap_colored(grid: &[Vec<usize>]) {
         for c in 0..grid[0].len() {
             let v = grid[r][c];
             if max == 0 || v == 0 {
-                print!("  ");
+                print!("   ");
             } else {
-                let idx = ((v - 1) * 5) / max + 1; // 1..=5 approx
-                let code = color_for_level(idx);
-                print!(" {}█{}", code, ANSI_RESET);
+                let idx = intensity_index(v, max, 10);
+                let code = color_for_level_rich(idx, 10);
+                print!(" {}█{} ", code, ANSI_RESET);
             }
         }
         println!();
     }
     // bottom week columns
-    print!("     ");
+    print!("    ");
     for _ in 0..grid[0].len() {
-        print!("^");
+        print!("^  ");
     }
     println!();
 }
@@ -447,7 +509,7 @@ pub fn run_timeline_with_options(weeks: usize, color: bool) -> Result<(), String
     if color { print!("\x1b[90m"); }
     println!("Y-axis: commits/week (max={}, mid≈{})", max, mid);
     if color { print!("\x1b[0m"); }
-    print_ramp_legend(color, "commits/week");
+    print_ramp_legend_rich(color, "commits/week");
     println!();
     // Default to a 7-line tall chart for better readability without flooding the screen
     render_timeline_multiline(&counts, 7, color);
@@ -486,7 +548,7 @@ pub fn run_heatmap_with_options(weeks: Option<usize>, color: bool) -> Result<(),
     if color { print!("\x1b[90m"); }
     println!("Calendar heatmap (UTC) — rows: Sun..Sat, cols: weeks (old→new), unit: commits/day, window: last {} weeks, max={}", w, max);
     if color { print!("\x1b[0m"); }
-    print_ramp_legend(color, "commits/day");
+    print_ramp_legend_rich(color, "commits/day");
     println!();
 
     if color {
