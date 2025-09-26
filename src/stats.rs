@@ -387,6 +387,8 @@ mod tests {
 
     #[test]
     fn test_gather_commit_stats_runs_ok() {
+        // Serialize against other CWD-mutating tests to ensure a stable repo context.
+        let _guard = crate::test_sync::test_lock();
         // This test runs against the live git repository.
         let result = gather_commit_stats();
         assert!(result.is_ok());
@@ -454,9 +456,7 @@ mod tests {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::time::{SystemTime, UNIX_EPOCH};
-    use std::sync::{Mutex, OnceLock, MutexGuard};
-
-    static TEST_DIR_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    use std::sync::MutexGuard;
 
     struct TempRepo {
         _guard: MutexGuard<'static, ()>,
@@ -467,7 +467,7 @@ mod tests {
 
     impl TempRepo {
         fn new() -> Self {
-            let guard = TEST_DIR_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+            let guard = crate::test_sync::test_lock();
 
             let old_dir = env::current_dir().unwrap();
             let base = old_dir.join(".tmp-git-insights-tests");
