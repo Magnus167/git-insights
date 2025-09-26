@@ -346,6 +346,20 @@ fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
     }
 }
 
+///// Build a centered hour axis for 24 columns with fixed per-column width.
+/// indent: spaces before the first column (row label width = 3 + 1 space -> 4)
+/// cell_w: visible width of each column (we use 3: two glyphs + one spacer)
+pub(super) fn build_hour_axis_24(indent: usize, cell_w: usize) -> String {
+    let mut s = String::with_capacity(indent + 24 * cell_w);
+    for _ in 0..indent { s.push(' '); }
+    for h in 0..24 {
+        let hh = format!("{:02}", h);
+        // Left-align the 2-digit hour within the cell width to align with cell's left edge
+        s.push_str(&format!("{:<w$}", hh, w = cell_w));
+    }
+    s
+}
+
 ///// Generic heatmap renderer with N rows x 24 hours
 fn render_heatmap_rows_x_24(rows: &[Vec<usize>], row_labels: &[String], color: bool) {
     let cols = 24usize;
@@ -356,31 +370,37 @@ fn render_heatmap_rows_x_24(rows: &[Vec<usize>], row_labels: &[String], color: b
             if v > max { max = v; }
         }
     }
-    // Header
-    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
+    // Header (centered hours per fixed-width column)
+    println!("{}", build_hour_axis_24(4, 3));
     for (ri, lab) in row_labels.iter().enumerate() {
         print!("{:<3} ", &lab);
         for h in 0..cols {
             let v = rows[ri][h];
             if color {
                 if max == 0 || v == 0 {
+                    // 3 spaces for an empty cell (width 3)
                     print!("   ");
                 } else {
+                    // Double bricks for clearer alignment: two blocks + one space (width 3)
                     let idx = intensity_index(v, max, 10);
-                    print!(" {}█{} ", color_for_level_rich(idx, 10), ANSI_RESET);
+                    let code = color_for_level_rich(idx, 10);
+                    print!("{}██{} ", code, ANSI_RESET);
                 }
             } else {
-                let ch = if max == 0 { ' ' } else {
+                // ASCII: double the ramp char for same width (2 chars + 1 space)
+                let ch = if max == 0 {
+                    ' '
+                } else {
                     let ramp: &[u8] = b" .:-=+*#%@";
                     let idx = (v.saturating_mul(ramp.len() - 1)) / max;
                     ramp[idx] as char
                 };
-                print!(" {} ", ch);
+                print!("{}{} ", ch, ch);
             }
         }
         println!();
     }
-    println!("    00  01  02  03  04  05  06  07  08  09  10  11  12  13  14  15  16  17  18  19  20  21  22  23");
+    println!("{}", build_hour_axis_24(4, 3));
 }
 
 /// Render a numeric table with N rows x 24 columns (counts)
@@ -639,9 +659,8 @@ mod tests {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::time::{SystemTime, UNIX_EPOCH};
-    use std::sync::{Mutex, OnceLock, MutexGuard};
+    use std::sync::MutexGuard;
 
-    static TEST_DIR_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     // Temp repo pattern (auto-cleaned; clean git config; no pager)
     struct TempRepo {
@@ -652,10 +671,7 @@ mod tests {
 
     impl TempRepo {
         fn new(prefix: &str) -> Self {
-            let guard = TEST_DIR_LOCK
-                .get_or_init(|| Mutex::new(()))
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let guard = crate::test_sync::test_lock();
 
             let old_dir = env::current_dir().unwrap();
             let base = env::temp_dir();
@@ -858,6 +874,19 @@ mod tests {
         assert_eq!(grid[0][0], 1);
         assert_eq!(grid[0][13], 1);
         assert_eq!(grid[1][5], 1);
+    }
+
+    #[test]
+    fn test_build_hour_axis_24_widths() {
+        let s = super::build_hour_axis_24(4, 3);
+        // Starts with 4 spaces (row label indent)
+        assert!(s.starts_with("    "));
+        // Total visible width = indent + 24 columns * 3 chars each
+        assert_eq!(s.len(), 4 + 24 * 3);
+        // Digits in order 00..23 when spaces are removed
+        let digits: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
+        let expect: String = (0..24).map(|h| format!("{:02}", h)).collect();
+        assert_eq!(digits, expect);
     }
 
     #[test]
