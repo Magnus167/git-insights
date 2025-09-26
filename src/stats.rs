@@ -1,10 +1,10 @@
 use crate::git::{count_pull_requests, run_command};
 use crate::output::{print_progress, print_table};
 use std::collections::{HashMap, HashSet};
+use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-use std::io::{self, Write};
 
 /// Represents the statistics for a single author.
 #[derive(Default, Debug, Clone)]
@@ -186,7 +186,14 @@ pub fn gather_loc_and_file_statsx(by_name: bool) -> Result<StatsMap, String> {
         print!("\rProcessing: {}/{} {}", idx, total, ch);
         let _ = io::stdout().flush();
 
-        let blame = run_command(&["--no-pager", "blame", "--line-porcelain", "HEAD", "--", &file]);
+        let blame = run_command(&[
+            "--no-pager",
+            "blame",
+            "--line-porcelain",
+            "HEAD",
+            "--",
+            &file,
+        ]);
         if blame.is_err() {
             continue;
         }
@@ -311,7 +318,14 @@ pub fn get_user_file_ownership(
         .to_ascii_lowercase();
 
     for file in files {
-        let blame = run_command(&["--no-pager", "blame", "--line-porcelain", "HEAD", "--", &file]);
+        let blame = run_command(&[
+            "--no-pager",
+            "blame",
+            "--line-porcelain",
+            "HEAD",
+            "--",
+            &file,
+        ]);
         if blame.is_err() {
             continue;
         }
@@ -331,7 +345,9 @@ pub fn get_user_file_ownership(
                 file_total += 1;
                 if let (Some(name), Some(mail)) = (&current_name, &current_mail) {
                     let is_match = if by_email {
-                        let mail_norm = mail.trim_matches(|c| c == '<' || c == '>').to_ascii_lowercase();
+                        let mail_norm = mail
+                            .trim_matches(|c| c == '<' || c == '>')
+                            .to_ascii_lowercase();
                         mail_norm == email_norm
                     } else {
                         name == &uname_norm
@@ -351,12 +367,17 @@ pub fn get_user_file_ownership(
 
     if sort_pct {
         rows.sort_by(|a, b| {
-            b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal)
+            b.3.partial_cmp(&a.3)
+                .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| b.1.cmp(&a.1))
                 .then_with(|| a.0.cmp(&b.0))
         });
     } else {
-        rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal)).then_with(|| a.0.cmp(&b.0)));
+        rows.sort_by(|a, b| {
+            b.1.cmp(&a.1)
+                .then_with(|| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.0.cmp(&b.0))
+        });
     }
 
     if top < rows.len() {
@@ -428,10 +449,16 @@ mod tests {
 
         let json = author_stats.to_json();
         // Due to HashSet's unordered nature, we need to check for both possible orders of files.
-        let expected_json1 = "{\"loc\": 100, \"commits\": 10, \"files\": [\"file1.rs\", \"file2.rs\"]}";
-        let expected_json2 = "{\"loc\": 100, \"commits\": 10, \"files\": [\"file2.rs\", \"file1.rs\"]}";
+        let expected_json1 =
+            "{\"loc\": 100, \"commits\": 10, \"files\": [\"file1.rs\", \"file2.rs\"]}";
+        let expected_json2 =
+            "{\"loc\": 100, \"commits\": 10, \"files\": [\"file2.rs\", \"file1.rs\"]}";
 
-        assert!(json == expected_json1 || json == expected_json2, "Actual JSON: {}", json);
+        assert!(
+            json == expected_json1 || json == expected_json2,
+            "Actual JSON: {}",
+            json
+        );
     }
 
     #[test]
@@ -446,7 +473,11 @@ mod tests {
         let expected_json1 = "{\"tags\": [\"v1.0\", \"v1.1\"], \"pull_requests\": 5}";
         let expected_json2 = "{\"tags\": [\"v1.1\", \"v1.0\"], \"pull_requests\": 5}";
 
-        assert!(json == expected_json1 || json == expected_json2, "Actual JSON: {}", json);
+        assert!(
+            json == expected_json1 || json == expected_json2,
+            "Actual JSON: {}",
+            json
+        );
     }
 
     // Ownership tests (create and clean a small repo under ./.tmp-git-insights-tests)
@@ -455,8 +486,8 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
-    use std::time::{SystemTime, UNIX_EPOCH};
     use std::sync::MutexGuard;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     struct TempRepo {
         _guard: MutexGuard<'static, ()>,
@@ -472,20 +503,21 @@ mod tests {
             let old_dir = env::current_dir().unwrap();
             let base = old_dir.join(".tmp-git-insights-tests");
             fs::create_dir_all(&base).unwrap();
-            let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
             let path = base.join(format!("git-insights-ownership-{}", ts));
             fs::create_dir_all(&path).unwrap();
             env::set_current_dir(&path).unwrap();
 
-            assert!(
-                Command::new("git")
-                    .args(["init", "-q"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            assert!(Command::new("git")
+                .args(["init", "-q"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
             fs::write("INIT", "init\n").unwrap();
             let add_ok = Command::new("git")
                 .args(["add", "."])
@@ -516,7 +548,12 @@ mod tests {
             c.stdout(Stdio::null()).stderr(Stdio::null());
             assert!(c.status().unwrap().success());
 
-            Self { _guard: guard, old_dir, base, path }
+            Self {
+                _guard: guard,
+                old_dir,
+                base,
+                path,
+            }
         }
     }
     impl Drop for TempRepo {

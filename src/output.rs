@@ -47,7 +47,7 @@ pub fn print_table(
         );
     }
 }
- 
+
 /// Prints a file ownership table for a user.
 /// Rows: (file, user_loc, file_loc, pct)
 pub fn print_user_ownership(rows: &[(String, usize, usize, f32)]) {
@@ -55,10 +55,7 @@ pub fn print_user_ownership(rows: &[(String, usize, usize, f32)]) {
         "| {:>4} | {:<60} | {:>7} | {:>7} | {:>6} |",
         "No.", "File", "userLOC", "fileLOC", "%own"
     );
-    println!(
-        "|{:->6}|:{:-<60}|{:->9}|{:->9}|{:->8}|",
-        "", "", "", "", ""
-    );
+    println!("|{:->6}|:{:-<60}|{:->9}|{:->9}|{:->8}|", "", "", "", "", "");
     for (i, (file, u, f, pct)) in rows.iter().enumerate() {
         println!(
             "| {:>4} | {:<60} | {:>7} | {:>7} | {:>5.1} |",
@@ -94,7 +91,7 @@ fn truncate(s: &str, max: usize) -> String {
         s[..max].to_string()
     }
 }
- 
+
 /// Renders a progress bar to the console.
 pub fn print_progress(processed: usize, total: usize, start_time: Instant) {
     const BAR_WIDTH: usize = 50;
