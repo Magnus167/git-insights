@@ -264,6 +264,10 @@ pub fn print_ramp_legend(color: bool, unit: &str) {
     }
 }
 
+/// Build a left-aligned hour axis for 24 columns with fixed per-column width.
+/// indent: spaces before the first column (row label width = 3 + 1 space -> 4)
+/// cell_w: visible width of each column (we use 3: two glyphs + one spacer)
+
 /// Render timeline as Unicode bars with optional color.
 /// Uses unicode ramp " ▁▂▃▄▅▆▇█" (9 levels) + color ramp.
 pub fn render_timeline_bars_colored(counts: &[usize], color: bool) {
@@ -590,9 +594,8 @@ mod tests {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::time::{SystemTime, UNIX_EPOCH};
-    use std::sync::{Mutex, OnceLock, MutexGuard};
+    use std::sync::MutexGuard;
 
-    static TEST_DIR_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     // Simple temp repo that lives under OS temp dir and is cleaned up on Drop.
     struct TempRepo {
@@ -604,10 +607,7 @@ mod tests {
     impl TempRepo {
         fn new(prefix: &str) -> Self {
             // Serialize temp repo creation and chdir to avoid races across parallel tests
-            let guard = TEST_DIR_LOCK
-                .get_or_init(|| Mutex::new(()))
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let guard = crate::test_sync::test_lock();
 
             let old_dir = env::current_dir().unwrap();
             let base = env::temp_dir();
@@ -795,7 +795,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_collect_commit_timestamps_from_temp_repo() {
         // Create one temp repo and keep it the current working directory
         // while collecting timestamps.
@@ -815,7 +814,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_run_timeline_and_heatmap_end_to_end() {
         // Create a repo and ensure both runners do not error.
         let repo = TempRepo::new("git-insights-vis-run");
