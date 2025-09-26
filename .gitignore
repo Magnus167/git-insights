@@ -3,3 +3,7 @@
 .env
 
 dev/
+
+./_tmp
+
+AGENTS.md
