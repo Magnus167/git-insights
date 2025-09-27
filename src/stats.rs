@@ -1,10 +1,10 @@
 use crate::git::{count_pull_requests, run_command};
 use crate::output::{print_progress, print_table};
 use std::collections::{HashMap, HashSet};
+use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-use std::io::{self, Write};
 
 /// Represents the statistics for a single author.
 #[derive(Default, Debug, Clone)]
@@ -43,7 +43,6 @@ impl UserStats {
     }
 }
 
-// A type alias for our map of statistics for readability.
 pub type StatsMap = HashMap<String, AuthorStats>;
 
 /// Gathers historical commit counts for each author from `git log`.
@@ -52,7 +51,6 @@ pub fn gather_commit_stats() -> Result<StatsMap, String> {
     let log_output = run_command(&["log", "--no-merges", "--pretty=format:--%aN--"])?;
 
     for author in log_output.split("--").filter(|s| !s.is_empty()) {
-        // check if is empty, if not then increment commits
         let trimmed_author = author.trim().to_string();
 
         if !trimmed_author.is_empty() {
@@ -123,13 +121,11 @@ pub fn gather_loc_and_file_stats() -> Result<StatsMap, String> {
 pub fn gather_user_stats(username: &str) -> Result<UserStats, String> {
     let mut user_stats = UserStats::default();
 
-    // handle tag listing errors as empty
     let tags_output = match run_command(&["tag", "--list", "--format=%(refname:short)"]) {
         Ok(s) => s,
         Err(_) => String::new(),
     };
     for tag in tags_output.lines() {
-        // If git log fails for a tag, treat as no matches for that tag.
         let log_output = run_command(&["log", tag, "--author", username, "--pretty=format:%an"])
             .unwrap_or_default();
         if !log_output.is_empty() {
@@ -137,14 +133,12 @@ pub fn gather_user_stats(username: &str) -> Result<UserStats, String> {
         }
     }
 
-    // If counting PR merges fails, default to 0 for resilience.
     user_stats.pull_requests = count_pull_requests(username).unwrap_or(0);
 
     Ok(user_stats)
 }
 
 fn tracked_text_files_head() -> Result<Vec<String>, String> {
-    // tracked files (preserve order)
     let files = run_command(&["--no-pager", "ls-files"])?;
     let files: Vec<String> = files
         .lines()
@@ -152,7 +146,6 @@ fn tracked_text_files_head() -> Result<Vec<String>, String> {
         .filter(|s| !s.is_empty())
         .collect();
 
-    // text files at HEAD
     let grep = run_command(&["--no-pager", "grep", "-I", "--name-only", ".", "HEAD"])?;
     let mut text: HashSet<String> = HashSet::new();
     for mut line in grep.lines().map(|s| s.trim()) {
@@ -165,13 +158,11 @@ fn tracked_text_files_head() -> Result<Vec<String>, String> {
         text.insert(line.to_string());
     }
 
-    // Intersect while preserving original order
     let filtered: Vec<String> = files.into_iter().filter(|f| text.contains(f)).collect();
     Ok(filtered)
 }
 
-/// Gather surviving LOC per author via blame --line-porcelain HEAD.
-/// by_name=false groups by "Name <email>", by_name=true groups by name only.
+/// Gather surviving LOC per author via blame.
 pub fn gather_loc_and_file_statsx(by_name: bool) -> Result<StatsMap, String> {
     let files = tracked_text_files_head()?;
     let mut stats: StatsMap = HashMap::new();
@@ -186,7 +177,14 @@ pub fn gather_loc_and_file_statsx(by_name: bool) -> Result<StatsMap, String> {
         print!("\rProcessing: {}/{} {}", idx, total, ch);
         let _ = io::stdout().flush();
 
-        let blame = run_command(&["--no-pager", "blame", "--line-porcelain", "HEAD", "--", &file]);
+        let blame = run_command(&[
+            "--no-pager",
+            "blame",
+            "--line-porcelain",
+            "HEAD",
+            "--",
+            &file,
+        ]);
         if blame.is_err() {
             continue;
         }
@@ -219,8 +217,7 @@ pub fn gather_loc_and_file_statsx(by_name: bool) -> Result<StatsMap, String> {
     Ok(stats)
 }
 
-/// Gather commit counts per author via `git shortlog -s -e HEAD`.
-/// by_name=false groups by "Name <email>", by_name=true groups by name only.
+/// Gather commit counts per author via git shortlog.
 pub fn gather_commit_statsx(by_name: bool) -> Result<StatsMap, String> {
     let out = run_command(&["--no-pager", "shortlog", "-s", "-e", "HEAD"])?;
     let mut stats: StatsMap = HashMap::new();
@@ -290,11 +287,7 @@ pub fn run_stats(by_name: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Compute per-file ownership for a user.
-/// - username: match against blame author (by_name) or author-mail (by_email)
-/// - by_email: if true, compare normalized emails; otherwise compare author name
-/// - top: max rows to return (use usize::MAX to disable)
-/// - sort_pct: if true, sort by percentage desc; otherwise by user_loc desc
+/// Per-file ownership for a user.
 pub fn get_user_file_ownership(
     username: &str,
     by_email: bool,
@@ -305,13 +298,19 @@ pub fn get_user_file_ownership(
     let mut rows: Vec<(String, usize, usize, f32)> = Vec::new();
 
     let uname_norm = username.trim().to_string();
-    // normalize email for comparison
     let email_norm = uname_norm
         .trim_matches(|c| c == '<' || c == '>')
         .to_ascii_lowercase();
 
     for file in files {
-        let blame = run_command(&["--no-pager", "blame", "--line-porcelain", "HEAD", "--", &file]);
+        let blame = run_command(&[
+            "--no-pager",
+            "blame",
+            "--line-porcelain",
+            "HEAD",
+            "--",
+            &file,
+        ]);
         if blame.is_err() {
             continue;
         }
@@ -331,7 +330,9 @@ pub fn get_user_file_ownership(
                 file_total += 1;
                 if let (Some(name), Some(mail)) = (&current_name, &current_mail) {
                     let is_match = if by_email {
-                        let mail_norm = mail.trim_matches(|c| c == '<' || c == '>').to_ascii_lowercase();
+                        let mail_norm = mail
+                            .trim_matches(|c| c == '<' || c == '>')
+                            .to_ascii_lowercase();
                         mail_norm == email_norm
                     } else {
                         name == &uname_norm
@@ -351,12 +352,17 @@ pub fn get_user_file_ownership(
 
     if sort_pct {
         rows.sort_by(|a, b| {
-            b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal)
+            b.3.partial_cmp(&a.3)
+                .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| b.1.cmp(&a.1))
                 .then_with(|| a.0.cmp(&b.0))
         });
     } else {
-        rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal)).then_with(|| a.0.cmp(&b.0)));
+        rows.sort_by(|a, b| {
+            b.1.cmp(&a.1)
+                .then_with(|| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.0.cmp(&b.0))
+        });
     }
 
     if top < rows.len() {
@@ -387,9 +393,7 @@ mod tests {
 
     #[test]
     fn test_gather_commit_stats_runs_ok() {
-        // Serialize against other CWD-mutating tests to ensure a stable repo context.
         let _guard = crate::test_sync::test_lock();
-        // This test runs against the live git repository.
         let result = gather_commit_stats();
         assert!(result.is_ok());
         let stats = result.unwrap();
@@ -400,17 +404,14 @@ mod tests {
     #[test]
     #[ignore] // This test is slow and prints to stdout.
     fn test_gather_loc_and_file_stats_runs_ok() {
-        // This test runs against the live git repository and can be slow.
         let result = gather_loc_and_file_stats();
         assert!(result.is_ok());
         let stats = result.unwrap();
-        // The project should have some stats.
         assert!(!stats.is_empty());
     }
 
     #[test]
     fn test_gather_user_stats_for_unknown_user() {
-        // Test with a user that almost certainly doesn't exist.
         let result = gather_user_stats("a-very-unlikely-user-name-to-exist");
         assert!(result.is_ok());
         let stats = result.unwrap();
@@ -427,11 +428,16 @@ mod tests {
         author_stats.files.insert("file2.rs".to_string());
 
         let json = author_stats.to_json();
-        // Due to HashSet's unordered nature, we need to check for both possible orders of files.
-        let expected_json1 = "{\"loc\": 100, \"commits\": 10, \"files\": [\"file1.rs\", \"file2.rs\"]}";
-        let expected_json2 = "{\"loc\": 100, \"commits\": 10, \"files\": [\"file2.rs\", \"file1.rs\"]}";
+        let expected_json1 =
+            "{\"loc\": 100, \"commits\": 10, \"files\": [\"file1.rs\", \"file2.rs\"]}";
+        let expected_json2 =
+            "{\"loc\": 100, \"commits\": 10, \"files\": [\"file2.rs\", \"file1.rs\"]}";
 
-        assert!(json == expected_json1 || json == expected_json2, "Actual JSON: {}", json);
+        assert!(
+            json == expected_json1 || json == expected_json2,
+            "Actual JSON: {}",
+            json
+        );
     }
 
     #[test]
@@ -442,21 +448,23 @@ mod tests {
         user_stats.tags.insert("v1.1".to_string());
 
         let json = user_stats.to_json();
-        // Due to HashSet's unordered nature, we need to check for both possible orders of tags.
         let expected_json1 = "{\"tags\": [\"v1.0\", \"v1.1\"], \"pull_requests\": 5}";
         let expected_json2 = "{\"tags\": [\"v1.1\", \"v1.0\"], \"pull_requests\": 5}";
 
-        assert!(json == expected_json1 || json == expected_json2, "Actual JSON: {}", json);
+        assert!(
+            json == expected_json1 || json == expected_json2,
+            "Actual JSON: {}",
+            json
+        );
     }
 
-    // Ownership tests (create and clean a small repo under ./.tmp-git-insights-tests)
     use std::env;
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
-    use std::time::{SystemTime, UNIX_EPOCH};
     use std::sync::MutexGuard;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     struct TempRepo {
         _guard: MutexGuard<'static, ()>,
@@ -472,20 +480,21 @@ mod tests {
             let old_dir = env::current_dir().unwrap();
             let base = old_dir.join(".tmp-git-insights-tests");
             fs::create_dir_all(&base).unwrap();
-            let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
             let path = base.join(format!("git-insights-ownership-{}", ts));
             fs::create_dir_all(&path).unwrap();
             env::set_current_dir(&path).unwrap();
 
-            assert!(
-                Command::new("git")
-                    .args(["init", "-q"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            assert!(Command::new("git")
+                .args(["init", "-q"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
             fs::write("INIT", "init\n").unwrap();
             let add_ok = Command::new("git")
                 .args(["add", "."])
@@ -516,14 +525,18 @@ mod tests {
             c.stdout(Stdio::null()).stderr(Stdio::null());
             assert!(c.status().unwrap().success());
 
-            Self { _guard: guard, old_dir, base, path }
+            Self {
+                _guard: guard,
+                old_dir,
+                base,
+                path,
+            }
         }
     }
     impl Drop for TempRepo {
         fn drop(&mut self) {
             let _ = env::set_current_dir(&self.old_dir);
             let _ = fs::remove_dir_all(&self.path);
-            // Ensure the base test directory is also removed so tests leave no trace
             let _ = fs::remove_dir_all(&self.base);
         }
     }
@@ -564,7 +577,6 @@ mod tests {
     fn test_get_user_file_ownership_by_name_and_email() {
         let _repo = TempRepo::new();
 
-        // Alice owns README fully (4 lines total)
         fs::write("README.md", "a\nb\nc\n").unwrap();
         commit_as("Alice", "alice@example.com", "feat: add README");
         fs::OpenOptions::new()
@@ -575,14 +587,11 @@ mod tests {
             .unwrap();
         commit_as("Alice", "alice@example.com", "feat: update README");
 
-        // Bob owns src.txt fully (2 lines total)
         fs::write("src.txt", "x\ny\n").unwrap();
         commit_as("Bob", "bob@example.com", "feat: add src");
 
-        // By name
         let rows = super::get_user_file_ownership("Alice", false, usize::MAX, false)
             .expect("ownership by name failed");
-        // Expect README.md 4/4 ~100%
         let mut found_readme = false;
         for (file, u, f, pct) in &rows {
             if file == "README.md" {
@@ -594,7 +603,6 @@ mod tests {
         }
         assert!(found_readme);
 
-        // By email
         let rows_email =
             super::get_user_file_ownership("alice@example.com", true, usize::MAX, false)
                 .expect("ownership by email failed");
@@ -609,7 +617,6 @@ mod tests {
         }
         assert!(found_readme_email);
 
-        // Bob by name should show src.txt 2/2
         let rows_bob = super::get_user_file_ownership("Bob", false, usize::MAX, false)
             .expect("ownership Bob failed");
         let mut found_src = false;
@@ -628,7 +635,6 @@ mod tests {
     fn test_get_user_file_ownership_top_and_sort_pct() {
         let _repo = TempRepo::new();
 
-        // Create 3 files owned by Alice with varying ownership
         fs::write("a.txt", "1\n2\n3\n").unwrap(); // 3 lines
         commit_as("Alice", "alice@example.com", "a");
         fs::write("b.txt", "1\n2\n").unwrap(); // 2 lines
@@ -636,10 +642,8 @@ mod tests {
         fs::write("c.txt", "1\n2\n3\n4\n").unwrap(); // 4 lines
         commit_as("Alice", "alice@example.com", "c");
 
-        // sort by pct and top 2
         let rows = super::get_user_file_ownership("Alice", false, 2, true)
             .expect("ownership sort pct failed");
-        // All 100% but ensure we only got top 2 rows
         assert_eq!(rows.len(), 2);
     }
 }
