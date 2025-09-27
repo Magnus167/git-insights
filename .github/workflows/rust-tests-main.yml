@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.8','3.9','3.10','3.11','3.12','3.13']
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
 
@@ -34,3 +34,17 @@ jobs:
 
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
+
+  unittests-main-success:
+    name: unittests-main-success
+    needs: [unittests-main-status]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check status
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "All tests passed"
+          else
+            echo "Some tests failed"
+            exit 1
+          fi
