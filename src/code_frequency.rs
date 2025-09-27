@@ -1,16 +1,7 @@
 use crate::visualize::collect_commit_timestamps;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Code-frequency visualizations:
-/// - Histograms: by hour-of-day (24), day-of-week (Sun..Sat 7), day-of-month (1..31)
-/// - Heatmaps: day-of-week x hour-of-day (7x24), day-of-month x hour-of-day (31x24)
-///
-/// Design goals:
-/// - No external deps
-/// - Clean git usage (reuses collect_commit_timestamps which uses --no-pager)
-/// - ASCII by default, optional ANSI color
-///
-/// CLI facing runner is `run_code_frequency_with_options`.
+/// Code-frequency visualizations.
 pub enum Group {
     HourOfDay,
     DayOfWeek,
@@ -18,11 +9,11 @@ pub enum Group {
 }
 
 pub enum HeatmapKind {
-    DowByHod, // 7 x 24
-    DomByHod, // 31 x 24
+    DowByHod,
+    DomByHod,
 }
 
-/// Filter timestamps to the last `weeks` weeks, aligning to end-of-week (UTC).
+/// Filter to last N weeks.
 fn filter_by_weeks(timestamps: &[u64], weeks: Option<usize>, now: u64) -> Vec<u64> {
     if let Some(w) = weeks {
         if w == 0 {
@@ -44,7 +35,7 @@ fn filter_by_weeks(timestamps: &[u64], weeks: Option<usize>, now: u64) -> Vec<u6
     }
 }
 
-/// Compute histograms
+/// Histograms.
 
 pub fn histogram_hour_of_day(timestamps: &[u64]) -> [usize; 24] {
     let mut bins = [0usize; 24];
@@ -55,7 +46,6 @@ pub fn histogram_hour_of_day(timestamps: &[u64]) -> [usize; 24] {
     bins
 }
 
-/// Weekday index: 0=Sun,1=Mon,...,6=Sat
 pub fn histogram_day_of_week(timestamps: &[u64]) -> [usize; 7] {
     let mut bins = [0usize; 7];
     for &t in timestamps {
@@ -66,7 +56,7 @@ pub fn histogram_day_of_week(timestamps: &[u64]) -> [usize; 7] {
     bins
 }
 
-/// Day-of-month 1..=31 mapped to bins[0..=30]
+/// Day-of-month histogram.
 pub fn histogram_day_of_month(timestamps: &[u64]) -> [usize; 31] {
     let mut bins = [0usize; 31];
     for &t in timestamps {
@@ -80,7 +70,7 @@ pub fn histogram_day_of_month(timestamps: &[u64]) -> [usize; 31] {
 
 /// Heatmaps
 
-/// 7 x 24 (Sun..Sat x hour 0..23)
+/// 7x24 heatmap.
 pub fn heatmap_dow_by_hod(timestamps: &[u64]) -> [[usize; 24]; 7] {
     let mut grid = [[0usize; 24]; 7];
     for &t in timestamps {
@@ -92,7 +82,7 @@ pub fn heatmap_dow_by_hod(timestamps: &[u64]) -> [[usize; 24]; 7] {
     grid
 }
 
-/// 31 x 24 (day 1..31 x hour 0..23) stored as [31][24], row index 0=>day=1
+/// 31x24 heatmap.
 pub fn heatmap_dom_by_hod(timestamps: &[u64]) -> [[usize; 24]; 31] {
     let mut grid = [[0usize; 24]; 31];
     for &t in timestamps {
@@ -106,12 +96,11 @@ pub fn heatmap_dom_by_hod(timestamps: &[u64]) -> [[usize; 24]; 31] {
     grid
 }
 
-/// Rendering
+/// Rendering.
 
 const ANSI_RESET: &str = "\x1b[0m";
 
-/// Map a value in [0..=max] into an intensity index 0..=levels-1.
-/// 0 stays 0 (blank); any non-zero maps to at least 1 to ensure visible shading.
+/// Map value to intensity index.
 fn intensity_index(v: usize, max: usize, levels: usize) -> usize {
     if max == 0 || v == 0 || levels <= 1 {
         return 0;
@@ -121,8 +110,7 @@ fn intensity_index(v: usize, max: usize, levels: usize) -> usize {
     idx.min(l)
 }
 
-/// Rich color palette (12 steps) for smoother gradients.
-/// Only call for non-zero intensity (idx >= 1). idx range: 0..=levels-1
+/// 12-step color palette.
 fn color_for_level_rich(idx: usize, levels: usize) -> &'static str {
     // 12-color ramp from dim through cool to warm hues.
     // Using standard ANSI codes (widely supported); bright/dim variants to increase steps.
@@ -153,7 +141,7 @@ fn color_for_level_rich(idx: usize, levels: usize) -> &'static str {
     PALETTE[k]
 }
 
-/// Legend using the rich palette (10 steps by default).
+/// Legend (rich palette).
 fn print_ramp_legend_rich(color: bool, unit: &str) {
     if color {
         print!("\x1b[90mLegend (low→high, blank=0 {}):\x1b[0m ", unit);
@@ -210,8 +198,7 @@ fn render_histogram_labeled(labels: &[&str], counts: &[usize], color: bool, unit
     }
 }
 
-/// Build a numeric table for histograms with explicit column separators.
-/// Columns: Label | Count | Bar (fixed width).
+/// Build histogram table.
 fn build_histogram_table(labels: &[&str], counts: &[usize]) -> String {
     use std::fmt::Write as _;
     let n = counts.len().min(labels.len());
@@ -299,8 +286,7 @@ fn build_histogram_table(labels: &[&str], counts: &[usize]) -> String {
     out
 }
 
-/// Print the histogram numeric table, with optional color.
-/// In colored mode, counts and bars are colorized while preserving table alignment.
+/// Render histogram table.
 fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
     if !color {
         let s = build_histogram_table(labels, counts);
@@ -404,9 +390,7 @@ fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
     }
 }
 
-///// Build a centered hour axis for 24 columns with fixed per-column width.
-/// indent: spaces before the first column (row label width = 3 + 1 space -> 4)
-/// cell_w: visible width of each column (we use 3: two glyphs + one spacer)
+/// Build hour axis (24 columns).
 pub(super) fn build_hour_axis_24(indent: usize, cell_w: usize) -> String {
     let mut s = String::with_capacity(indent + 24 * cell_w);
     for _ in 0..indent {
@@ -420,7 +404,7 @@ pub(super) fn build_hour_axis_24(indent: usize, cell_w: usize) -> String {
     s
 }
 
-///// Generic heatmap renderer with N rows x 24 hours
+/// Render heatmap grid (rows x 24).
 fn render_heatmap_rows_x_24(rows: &[Vec<usize>], row_labels: &[String], color: bool) {
     let cols = 24usize;
     // Compute global max
@@ -465,7 +449,7 @@ fn render_heatmap_rows_x_24(rows: &[Vec<usize>], row_labels: &[String], color: b
     println!("{}", build_hour_axis_24(4, 3));
 }
 
-/// Render a numeric table with N rows x 24 columns (counts)
+/// Build heatmap table.
 fn build_heatmap_table_rows_x_24(rows: &[Vec<usize>], row_labels: &[String]) -> String {
     use std::fmt::Write as _;
     // Compute max value to determine width (min width 2)
@@ -524,14 +508,13 @@ fn build_heatmap_table_rows_x_24(rows: &[Vec<usize>], row_labels: &[String]) -> 
     out
 }
 
-/// Render a numeric table with N rows x 24 columns (counts)
+/// Render heatmap table.
 fn render_heatmap_table_rows_x_24(rows: &[Vec<usize>], row_labels: &[String]) {
     let s = build_heatmap_table_rows_x_24(rows, row_labels);
     print!("{}", s);
 }
 
-/// Render a colored numeric table with N rows x 24 columns (counts).
-/// Colors numbers according to intensity, preserving alignment via fixed widths.
+/// Render colored heatmap table.
 fn render_heatmap_table_rows_x_24_colored(
     rows: &[Vec<usize>],
     row_labels: &[String],
@@ -610,7 +593,7 @@ fn render_heatmap_table_rows_x_24_colored(
     }
 }
 
-/// Public runner
+/// Runner.
 
 pub fn run_code_frequency_with_options(
     group: Option<Group>,
@@ -719,13 +702,14 @@ pub fn run_code_frequency_with_options(
     Ok(())
 }
 
-/// Convert Unix seconds to (year, month, day) in proleptic Gregorian, UTC.
-/// Based on public-domain algorithms (Howard Hinnant's civil_from_days).
+/// Convert Unix seconds to (y,m,d) UTC.
 fn ymd_from_unix(t: u64) -> (i32, u32, u32) {
     let days = (t / 86_400) as i64;
     civil_from_days(days)
 }
 
+/// Howard Hinnant's algorithm from
+/// https://howardhinnant.github.io/date_algorithms.html#civil_from_days
 fn civil_from_days(z: i64) -> (i32, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
