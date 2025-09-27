@@ -11,7 +11,16 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 regex = "1.11.2"
+pyo3 = { version = "0.22.2", features = ["extension-module"], optional = true }
 
+
+[features]
+default = []
+python = ["pyo3"]
+
+[lib]
+name = "git_insights"
+crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "git-insights"
