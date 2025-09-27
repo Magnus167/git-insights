@@ -1,19 +1,18 @@
 use git_insights::{
-    cli::{Cli, Commands, render_help, version_string},
-    git::{is_git_installed, is_in_git_repo},
-    output::{print_user_stats, print_user_ownership},
-    stats::{
-        gather_commit_stats, gather_loc_and_file_stats, gather_user_stats, run_stats,
-        get_user_file_ownership,
-    },
-    visualize::{run_timeline_with_options, run_heatmap_with_options},
+    cli::{render_help, version_string, Cli, Commands},
     code_frequency::{run_code_frequency_with_options, Group, HeatmapKind},
+    git::{is_git_installed, is_in_git_repo},
+    output::{print_user_ownership, print_user_stats},
+    stats::{
+        gather_commit_stats, gather_loc_and_file_stats, gather_user_stats, get_user_file_ownership,
+        run_stats,
+    },
+    visualize::{run_heatmap_with_options, run_timeline_with_options},
 };
 use std::fs::File;
 use std::io::Write;
 
 fn main() {
-    // Parse CLI first so help/version work anywhere (even outside a git repo)
     let cli = match Cli::parse() {
         Ok(cli) => cli,
         Err(e) => {
@@ -22,7 +21,6 @@ fn main() {
         }
     };
 
-    // Handle help/version early and exit 0
     match &cli.command {
         Commands::Help { topic } => {
             println!("{}", render_help(topic.clone()));
@@ -35,7 +33,6 @@ fn main() {
         _ => {}
     }
 
-    // For all other commands we require git and a repo
     if !is_git_installed() {
         eprintln!(
             "Error: 'git' command not found. Please ensure Git is installed and in your PATH."
@@ -57,9 +54,14 @@ fn main() {
         Commands::Json => {
             export_to_json();
         }
-        Commands::User { username, ownership, by_email, top, sort } => {
+        Commands::User {
+            username,
+            ownership,
+            by_email,
+            top,
+            sort,
+        } => {
             if *ownership {
-                // defaults
                 let top_n = top.unwrap_or(10);
                 let sort_pct = sort.as_deref().map(|s| s == "pct").unwrap_or(false);
                 match get_user_file_ownership(username, *by_email, top_n, sort_pct) {
@@ -86,12 +88,21 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+        Commands::CodeFrequency {
+            group,
+            heatmap,
+            weeks,
+            color,
+            table,
+        } => {
             let parsed_heatmap = match heatmap.as_deref() {
                 Some("dow-hod") => Some(HeatmapKind::DowByHod),
                 Some("dom-hod") => Some(HeatmapKind::DomByHod),
                 Some(other) => {
-                    eprintln!("Error: unknown --heatmap '{}'. Expected dow-hod|dom-hod.", other);
+                    eprintln!(
+                        "Error: unknown --heatmap '{}'. Expected dow-hod|dom-hod.",
+                        other
+                    );
                     std::process::exit(1);
                 }
                 None => None,
@@ -106,12 +117,17 @@ fn main() {
                 }
                 None => None,
             };
-            if let Err(e) = run_code_frequency_with_options(parsed_group, parsed_heatmap, *weeks, *color, *table) {
+            if let Err(e) = run_code_frequency_with_options(
+                parsed_group,
+                parsed_heatmap,
+                *weeks,
+                *color,
+                *table,
+            ) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-        // Help/Version already handled above
         _ => {}
     }
 }
@@ -131,7 +147,8 @@ fn export_to_json() {
     }
     let json_output = format!("{{\n{}\n}}", json_parts.join(",\n"));
     let mut file = File::create("git-insights.json").expect("Failed to create JSON file.");
-    file.write_all(json_output.as_bytes()).expect("Failed to write JSON to file.");
+    file.write_all(json_output.as_bytes())
+        .expect("Failed to write JSON to file.");
     println!("Successfully exported to git-insights.json");
 }
 
