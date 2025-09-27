@@ -11,13 +11,25 @@ pub enum HelpTopic {
 
 #[derive(Debug)]
 pub enum Commands {
-    // Default grouping by author name; pass --by-email/-e to group by name+email
-    Stats { by_name: bool },
+    Stats {
+        by_name: bool,
+    },
     Json,
-    Timeline { weeks: Option<usize>, color: bool },
-    Heatmap { weeks: Option<usize>, color: bool },
-    CodeFrequency { group: Option<String>, heatmap: Option<String>, weeks: Option<usize>, color: bool, table: bool },
-    // user <username> [--ownership] [--by-email|-e] [--top N|--top=N] [--sort loc|pct|--sort=loc]
+    Timeline {
+        weeks: Option<usize>,
+        color: bool,
+    },
+    Heatmap {
+        weeks: Option<usize>,
+        color: bool,
+    },
+    CodeFrequency {
+        group: Option<String>,
+        heatmap: Option<String>,
+        weeks: Option<usize>,
+        color: bool,
+        table: bool,
+    },
     User {
         username: String,
         ownership: bool,
@@ -25,7 +37,9 @@ pub enum Commands {
         top: Option<usize>,
         sort: Option<String>,
     },
-    Help { topic: HelpTopic },
+    Help {
+        topic: HelpTopic,
+    },
     Version,
 }
 
@@ -71,8 +85,7 @@ impl Cli {
                         topic: HelpTopic::Stats,
                     }
                 } else {
-                    let by_email =
-                        has_flag(&args[2..], "--by-email") || has_flag(&args[2..], "-e");
+                    let by_email = has_flag(&args[2..], "--by-email") || has_flag(&args[2..], "-e");
                     let by_name = !by_email;
                     Commands::Stats { by_name }
                 }
@@ -142,10 +155,11 @@ impl Cli {
             }
             "timeline" => {
                 if has_flag(&args[2..], "-h") || has_flag(&args[2..], "--help") {
-                    Commands::Help { topic: HelpTopic::Timeline }
+                    Commands::Help {
+                        topic: HelpTopic::Timeline,
+                    }
                 } else {
                     let mut weeks: Option<usize> = None;
-                    // Default: color ON. Allow disabling with --no-color
                     let mut color = true;
 
                     let rest = &args[2..];
@@ -168,14 +182,12 @@ impl Cli {
                         } else if a == "--no-color" {
                             color = false;
                         } else if let Some(num) = a.strip_prefix("--") {
-                            // support shorthand like: timeline --52
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
                                 }
                             }
                         } else if let Some(num) = a.strip_prefix('-') {
-                            // support shorthand like: timeline -52
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
@@ -189,10 +201,11 @@ impl Cli {
             }
             "heatmap" => {
                 if has_flag(&args[2..], "-h") || has_flag(&args[2..], "--help") {
-                    Commands::Help { topic: HelpTopic::Heatmap }
+                    Commands::Help {
+                        topic: HelpTopic::Heatmap,
+                    }
                 } else {
                     let mut weeks: Option<usize> = None;
-                    // Default: color ON. Allow disabling with --no-color
                     let mut color = true;
 
                     let rest = &args[2..];
@@ -215,14 +228,12 @@ impl Cli {
                         } else if a == "--no-color" {
                             color = false;
                         } else if let Some(num) = a.strip_prefix("--") {
-                            // support shorthand like: heatmap --60 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
                                 }
                             }
                         } else if let Some(num) = a.strip_prefix('-') {
-                            // support shorthand like: heatmap -60 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
@@ -236,12 +247,13 @@ impl Cli {
             }
             "code-frequency" => {
                 if has_flag(&args[2..], "-h") || has_flag(&args[2..], "--help") {
-                    Commands::Help { topic: HelpTopic::CodeFrequency }
+                    Commands::Help {
+                        topic: HelpTopic::CodeFrequency,
+                    }
                 } else {
                     let mut group: Option<String> = None;
                     let mut heatmap: Option<String> = None;
                     let mut weeks: Option<usize> = None;
-                    // Default: color ON. Allow disabling with --no-color
                     let mut color = true;
                     let mut table = false;
 
@@ -281,14 +293,12 @@ impl Cli {
                         } else if a == "--table" {
                             table = true;
                         } else if let Some(num) = a.strip_prefix("--") {
-                            // support shorthand like: code-frequency --52 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
                                 }
                             }
                         } else if let Some(num) = a.strip_prefix('-') {
-                            // support shorthand like: code-frequency -52 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
@@ -297,7 +307,13 @@ impl Cli {
                         }
                         i += 1;
                     }
-                    Commands::CodeFrequency { group, heatmap, weeks, color, table }
+                    Commands::CodeFrequency {
+                        group,
+                        heatmap,
+                        weeks,
+                        color,
+                        table,
+                    }
                 }
             }
             _ => {
@@ -508,7 +524,6 @@ EXAMPLES:
     }
 }
 
-// Expose version pulled from Cargo metadata
 pub fn version_string() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
@@ -519,11 +534,8 @@ mod tests {
 
     #[test]
     fn test_cli_stats_default_by_name() {
-        let cli = Cli::parse_from_args(vec![
-            "git-insights".to_string(),
-            "stats".to_string(),
-        ])
-        .expect("Failed to parse args");
+        let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "stats".to_string()])
+            .expect("Failed to parse args");
         match cli.command {
             Commands::Stats { by_name } => assert!(by_name),
             _ => panic!("Expected Stats command"),
@@ -574,7 +586,13 @@ mod tests {
         ])
         .expect("Failed to parse args");
         match cli.command {
-            Commands::User { username, ownership, by_email, top, sort } => {
+            Commands::User {
+                username,
+                ownership,
+                by_email,
+                top,
+                sort,
+            } => {
                 assert_eq!(username, "testuser");
                 assert!(!ownership);
                 assert!(!by_email);
@@ -600,7 +618,13 @@ mod tests {
         ])
         .expect("Failed to parse args");
         match cli.command {
-            Commands::User { username, ownership, by_email, top, sort } => {
+            Commands::User {
+                username,
+                ownership,
+                by_email,
+                top,
+                sort,
+            } => {
                 assert_eq!(username, "palash");
                 assert!(ownership);
                 assert!(by_email);
@@ -610,7 +634,6 @@ mod tests {
             _ => panic!("Expected User command with ownership flags"),
         }
 
-        // equals-style flags should also parse
         let cli2 = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "user".to_string(),
@@ -622,7 +645,13 @@ mod tests {
         ])
         .expect("Failed to parse args");
         match cli2.command {
-            Commands::User { username, ownership, by_email, top, sort } => {
+            Commands::User {
+                username,
+                ownership,
+                by_email,
+                top,
+                sort,
+            } => {
                 assert_eq!(username, "palash");
                 assert!(ownership);
                 assert!(by_email);
@@ -647,11 +676,8 @@ mod tests {
 
     #[test]
     fn test_cli_top_help_flag() {
-        let cli = Cli::parse_from_args(vec![
-            "git-insights".to_string(),
-            "--help".to_string(),
-        ])
-        .expect("parse");
+        let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "--help".to_string()])
+            .expect("parse");
         match cli.command {
             Commands::Help { topic } => match topic {
                 HelpTopic::Top => {}
@@ -680,19 +706,15 @@ mod tests {
 
     #[test]
     fn test_cli_version_flag() {
-        let cli = Cli::parse_from_args(vec![
-            "git-insights".to_string(),
-            "--version".to_string(),
-        ])
-        .expect("parse");
+        let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "--version".to_string()])
+            .expect("parse");
         assert!(matches!(cli.command, Commands::Version));
     }
 
     #[test]
     fn test_cli_unknown_command() {
-        let err =
-            Cli::parse_from_args(vec!["git-insights".to_string(), "invalid".to_string()])
-                .expect_err("Expected an error for unknown command");
+        let err = Cli::parse_from_args(vec!["git-insights".to_string(), "invalid".to_string()])
+            .expect_err("Expected an error for unknown command");
         assert!(err.contains("Unknown command: invalid"));
     }
 
@@ -710,7 +732,7 @@ mod tests {
         match cli.command {
             Commands::Timeline { weeks, color } => {
                 assert!(weeks.is_none());
-                assert!(color); // default color ON
+                assert!(color);
             }
             _ => panic!("Expected Timeline command"),
         }
@@ -723,18 +745,26 @@ mod tests {
             "timeline".to_string(),
             "--weeks".to_string(),
             "12".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli.command {
-            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(12)); assert!(color); }
+            Commands::Timeline { weeks, color } => {
+                assert_eq!(weeks, Some(12));
+                assert!(color);
+            }
             _ => panic!("Expected Timeline command"),
         }
         let cli2 = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "timeline".to_string(),
             "--weeks=8".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli2.command {
-            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(8)); assert!(color); }
+            Commands::Timeline { weeks, color } => {
+                assert_eq!(weeks, Some(8));
+                assert!(color);
+            }
             _ => panic!("Expected Timeline command"),
         }
     }
@@ -744,7 +774,10 @@ mod tests {
         let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "heatmap".to_string()])
             .expect("parse");
         match cli.command {
-            Commands::Heatmap { weeks, color } => { assert!(weeks.is_none()); assert!(color); }
+            Commands::Heatmap { weeks, color } => {
+                assert!(weeks.is_none());
+                assert!(color);
+            }
             _ => panic!("Expected Heatmap"),
         }
     }
@@ -755,9 +788,13 @@ mod tests {
             "git-insights".to_string(),
             "timeline".to_string(),
             "--52".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli.command {
-            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(52)); assert!(color); }
+            Commands::Timeline { weeks, color } => {
+                assert_eq!(weeks, Some(52));
+                assert!(color);
+            }
             _ => panic!("Expected Timeline command with numeric shorthand"),
         }
 
@@ -765,9 +802,13 @@ mod tests {
             "git-insights".to_string(),
             "timeline".to_string(),
             "-52".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli_hyphen.command {
-            Commands::Timeline { weeks, color } => { assert_eq!(weeks, Some(52)); assert!(color); }
+            Commands::Timeline { weeks, color } => {
+                assert_eq!(weeks, Some(52));
+                assert!(color);
+            }
             _ => panic!("Expected Timeline command with -NN shorthand"),
         }
     }
@@ -779,9 +820,13 @@ mod tests {
             "heatmap".to_string(),
             "--60".to_string(),
             "--color".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli.command {
-            Commands::Heatmap { weeks, color } => { assert_eq!(weeks, Some(60)); assert!(color); }
+            Commands::Heatmap { weeks, color } => {
+                assert_eq!(weeks, Some(60));
+                assert!(color);
+            }
             _ => panic!("Expected Heatmap with weeks+color"),
         }
 
@@ -789,22 +834,32 @@ mod tests {
             "git-insights".to_string(),
             "heatmap".to_string(),
             "-60".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli_hyphen.command {
-            Commands::Heatmap { weeks, color } => { assert_eq!(weeks, Some(60)); assert!(color); }
+            Commands::Heatmap { weeks, color } => {
+                assert_eq!(weeks, Some(60));
+                assert!(color);
+            }
             _ => panic!("Expected Heatmap with -NN shorthand"),
         }
     }
 
     #[test]
     fn test_cli_code_frequency_defaults_and_flags() {
-        // default: no group/heatmap -> histogram hod, color ON, weeks None
         let cli = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "code-frequency".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli.command {
-            Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+            Commands::CodeFrequency {
+                group,
+                heatmap,
+                weeks,
+                color,
+                table,
+            } => {
                 assert!(group.is_none());
                 assert!(heatmap.is_none());
                 assert!(weeks.is_none());
@@ -814,7 +869,6 @@ mod tests {
             _ => panic!("Expected CodeFrequency"),
         }
 
-        // group & heatmap & weeks equals-style & no-color
         let cli2 = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "code-frequency".to_string(),
@@ -824,9 +878,16 @@ mod tests {
             "--weeks=26".to_string(),
             "--no-color".to_string(),
             "--table".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli2.command {
-            Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+            Commands::CodeFrequency {
+                group,
+                heatmap,
+                weeks,
+                color,
+                table,
+            } => {
                 assert_eq!(group.as_deref(), Some("dom"));
                 assert_eq!(heatmap.as_deref(), Some("dow-hod"));
                 assert_eq!(weeks, Some(26));
@@ -836,14 +897,20 @@ mod tests {
             _ => panic!("Expected CodeFrequency with flags"),
         }
 
-        // numeric shorthand for weeks
         let cli3 = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "code-frequency".to_string(),
             "--52".to_string(),
-        ]).expect("parse");
+        ])
+        .expect("parse");
         match cli3.command {
-            Commands::CodeFrequency { group, heatmap, weeks, color, table } => {
+            Commands::CodeFrequency {
+                group,
+                heatmap,
+                weeks,
+                color,
+                table,
+            } => {
                 assert!(group.is_none());
                 assert!(heatmap.is_none());
                 assert_eq!(weeks, Some(52));

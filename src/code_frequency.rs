@@ -1,16 +1,7 @@
 use crate::visualize::collect_commit_timestamps;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Code-frequency visualizations:
-/// - Histograms: by hour-of-day (24), day-of-week (Sun..Sat 7), day-of-month (1..31)
-/// - Heatmaps: day-of-week x hour-of-day (7x24), day-of-month x hour-of-day (31x24)
-///
-/// Design goals:
-/// - No external deps
-/// - Clean git usage (reuses collect_commit_timestamps which uses --no-pager)
-/// - ASCII by default, optional ANSI color
-///
-/// CLI facing runner is `run_code_frequency_with_options`.
+/// Code-frequency visualizations.
 pub enum Group {
     HourOfDay,
     DayOfWeek,
@@ -18,11 +9,11 @@ pub enum Group {
 }
 
 pub enum HeatmapKind {
-    DowByHod, // 7 x 24
-    DomByHod, // 31 x 24
+    DowByHod,
+    DomByHod,
 }
 
-/// Filter timestamps to the last `weeks` weeks, aligning to end-of-week (UTC).
+/// Filter to last N weeks.
 fn filter_by_weeks(timestamps: &[u64], weeks: Option<usize>, now: u64) -> Vec<u64> {
     if let Some(w) = weeks {
         if w == 0 {
@@ -44,7 +35,7 @@ fn filter_by_weeks(timestamps: &[u64], weeks: Option<usize>, now: u64) -> Vec<u6
     }
 }
 
-/// Compute histograms
+/// Histograms.
 
 pub fn histogram_hour_of_day(timestamps: &[u64]) -> [usize; 24] {
     let mut bins = [0usize; 24];
@@ -55,7 +46,6 @@ pub fn histogram_hour_of_day(timestamps: &[u64]) -> [usize; 24] {
     bins
 }
 
-/// Weekday index: 0=Sun,1=Mon,...,6=Sat
 pub fn histogram_day_of_week(timestamps: &[u64]) -> [usize; 7] {
     let mut bins = [0usize; 7];
     for &t in timestamps {
@@ -66,7 +56,7 @@ pub fn histogram_day_of_week(timestamps: &[u64]) -> [usize; 7] {
     bins
 }
 
-/// Day-of-month 1..=31 mapped to bins[0..=30]
+/// Day-of-month histogram.
 pub fn histogram_day_of_month(timestamps: &[u64]) -> [usize; 31] {
     let mut bins = [0usize; 31];
     for &t in timestamps {
@@ -80,7 +70,7 @@ pub fn histogram_day_of_month(timestamps: &[u64]) -> [usize; 31] {
 
 /// Heatmaps
 
-/// 7 x 24 (Sun..Sat x hour 0..23)
+/// 7x24 heatmap.
 pub fn heatmap_dow_by_hod(timestamps: &[u64]) -> [[usize; 24]; 7] {
     let mut grid = [[0usize; 24]; 7];
     for &t in timestamps {
@@ -92,7 +82,7 @@ pub fn heatmap_dow_by_hod(timestamps: &[u64]) -> [[usize; 24]; 7] {
     grid
 }
 
-/// 31 x 24 (day 1..31 x hour 0..23) stored as [31][24], row index 0=>day=1
+/// 31x24 heatmap.
 pub fn heatmap_dom_by_hod(timestamps: &[u64]) -> [[usize; 24]; 31] {
     let mut grid = [[0usize; 24]; 31];
     for &t in timestamps {
@@ -106,12 +96,11 @@ pub fn heatmap_dom_by_hod(timestamps: &[u64]) -> [[usize; 24]; 31] {
     grid
 }
 
-/// Rendering
+/// Rendering.
 
 const ANSI_RESET: &str = "\x1b[0m";
 
-/// Map a value in [0..=max] into an intensity index 0..=levels-1.
-/// 0 stays 0 (blank); any non-zero maps to at least 1 to ensure visible shading.
+/// Map value to intensity index.
 fn intensity_index(v: usize, max: usize, levels: usize) -> usize {
     if max == 0 || v == 0 || levels <= 1 {
         return 0;
@@ -121,8 +110,7 @@ fn intensity_index(v: usize, max: usize, levels: usize) -> usize {
     idx.min(l)
 }
 
-/// Rich color palette (12 steps) for smoother gradients.
-/// Only call for non-zero intensity (idx >= 1). idx range: 0..=levels-1
+/// 12-step color palette.
 fn color_for_level_rich(idx: usize, levels: usize) -> &'static str {
     // 12-color ramp from dim through cool to warm hues.
     // Using standard ANSI codes (widely supported); bright/dim variants to increase steps.
@@ -145,11 +133,15 @@ fn color_for_level_rich(idx: usize, levels: usize) -> &'static str {
         return PALETTE[0];
     }
     // Scale idx (0..levels-1) into PALETTE indices (0..n-1)
-    let k = if idx >= levels - 1 { n - 1 } else { (idx * (n - 1)) / (levels - 1) };
+    let k = if idx >= levels - 1 {
+        n - 1
+    } else {
+        (idx * (n - 1)) / (levels - 1)
+    };
     PALETTE[k]
 }
 
-/// Legend using the rich palette (10 steps by default).
+/// Legend (rich palette).
 fn print_ramp_legend_rich(color: bool, unit: &str) {
     if color {
         print!("\x1b[90mLegend (low→high, blank=0 {}):\x1b[0m ", unit);
@@ -165,14 +157,16 @@ fn print_ramp_legend_rich(color: bool, unit: &str) {
     }
 }
 
-
-
 fn render_histogram_labeled(labels: &[&str], counts: &[usize], color: bool, unit: &str) {
     let max = counts.iter().copied().max().unwrap_or(0);
     let label_width = labels.iter().map(|s| s.len()).max().unwrap_or(0).max(3);
-    if color { print!("\x1b[90m"); }
+    if color {
+        print!("\x1b[90m");
+    }
     println!("Histogram — unit: {}", unit);
-    if color { print!("\x1b[0m"); }
+    if color {
+        print!("\x1b[0m");
+    }
     print_ramp_legend_rich(color, unit);
 
     if max == 0 {
@@ -189,26 +183,35 @@ fn render_histogram_labeled(labels: &[&str], counts: &[usize], color: bool, unit
         if color {
             let idx = intensity_index(c, max, 10);
             line.push_str(color_for_level_rich(idx, 10));
-            for _ in 0..bar_len { line.push('█'); }
+            for _ in 0..bar_len {
+                line.push('█');
+            }
             line.push_str(ANSI_RESET);
             line.push_str(&format!(" {}", c));
         } else {
-            for _ in 0..bar_len { line.push('#'); }
+            for _ in 0..bar_len {
+                line.push('#');
+            }
             line.push_str(&format!(" {}", c));
         }
         println!("{}", line);
     }
 }
 
-/// Build a numeric table for histograms with explicit column separators.
-/// Columns: Label | Count | Bar (fixed width).
+/// Build histogram table.
 fn build_histogram_table(labels: &[&str], counts: &[usize]) -> String {
     use std::fmt::Write as _;
     let n = counts.len().min(labels.len());
     let max_count = counts.iter().copied().max().unwrap_or(0);
 
     // Compute data-driven widths
-    let label_w_data = labels.iter().take(n).map(|s| s.len()).max().unwrap_or(0).max(3);
+    let label_w_data = labels
+        .iter()
+        .take(n)
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(0)
+        .max(3);
     let count_w_data = max_count.to_string().len().max(1);
     let bar_w_data = 20usize;
 
@@ -225,11 +228,17 @@ fn build_histogram_table(labels: &[&str], counts: &[usize]) -> String {
 
     let push_sep = |s: &mut String| {
         s.push('+');
-        for _ in 0..(label_w + 2) { s.push('-'); }
+        for _ in 0..(label_w + 2) {
+            s.push('-');
+        }
         s.push('+');
-        for _ in 0..(count_w + 2) { s.push('-'); }
+        for _ in 0..(count_w + 2) {
+            s.push('-');
+        }
         s.push('+');
-        for _ in 0..(bar_w + 2) { s.push('-'); }
+        for _ in 0..(bar_w + 2) {
+            s.push('-');
+        }
         s.push_str("+\n");
     };
 
@@ -251,10 +260,18 @@ fn build_histogram_table(labels: &[&str], counts: &[usize]) -> String {
     for i in 0..n {
         let lab = labels[i];
         let c = counts[i];
-        let filled = if max_count == 0 { 0 } else { (c * bar_w + max_count - 1) / max_count }; // ceil
+        let filled = if max_count == 0 {
+            0
+        } else {
+            (c * bar_w + max_count - 1) / max_count
+        }; // ceil
         let mut bar = String::with_capacity(bar_w);
-        for _ in 0..filled { bar.push('#'); }
-        for _ in filled..bar_w { bar.push(' '); }
+        for _ in 0..filled {
+            bar.push('#');
+        }
+        for _ in filled..bar_w {
+            bar.push(' ');
+        }
         let _ = write!(
             out,
             "| {:>lw$} | {:>cw$} | {} |\n",
@@ -269,8 +286,7 @@ fn build_histogram_table(labels: &[&str], counts: &[usize]) -> String {
     out
 }
 
-/// Print the histogram numeric table, with optional color.
-/// In colored mode, counts and bars are colorized while preserving table alignment.
+/// Render histogram table.
 fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
     if !color {
         let s = build_histogram_table(labels, counts);
@@ -284,7 +300,13 @@ fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
     let max_count = counts.iter().copied().max().unwrap_or(0);
 
     // Compute data-driven widths (ensuring headers fit)
-    let label_w_data = labels.iter().take(n).map(|s| s.len()).max().unwrap_or(0).max(3);
+    let label_w_data = labels
+        .iter()
+        .take(n)
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(0)
+        .max(3);
     let count_w_data = max_count.to_string().len().max(1);
     let bar_w_data = 20usize;
     let label_w = label_w_data.max("Label".len());
@@ -293,11 +315,17 @@ fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
 
     let push_sep = |s: &mut String| {
         s.push('+');
-        for _ in 0..(label_w + 2) { s.push('-'); }
+        for _ in 0..(label_w + 2) {
+            s.push('-');
+        }
         s.push('+');
-        for _ in 0..(count_w + 2) { s.push('-'); }
+        for _ in 0..(count_w + 2) {
+            s.push('-');
+        }
         s.push('+');
-        for _ in 0..(bar_w + 2) { s.push('-'); }
+        for _ in 0..(bar_w + 2) {
+            s.push('-');
+        }
         s.push_str("+\n");
     };
 
@@ -326,14 +354,30 @@ fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
         let c = counts[i];
 
         // Bar content using full block '█' for better color appearance
-        let filled = if max_count == 0 { 0 } else { (c * bar_w + max_count - 1) / max_count }; // ceil
+        let filled = if max_count == 0 {
+            0
+        } else {
+            (c * bar_w + max_count - 1) / max_count
+        }; // ceil
         let mut bar = String::with_capacity(bar_w);
-        for _ in 0..filled { bar.push('█'); }
-        for _ in filled..bar_w { bar.push(' '); }
+        for _ in 0..filled {
+            bar.push('█');
+        }
+        for _ in filled..bar_w {
+            bar.push(' ');
+        }
 
         // Shade/color mapping; zero uses dim
-        let shade = if c == 0 { 0 } else { intensity_index(c, max_count, 10) };
-        let code = if shade == 0 { "\x1b[90m" } else { color_for_level_rich(shade, 10) };
+        let shade = if c == 0 {
+            0
+        } else {
+            intensity_index(c, max_count, 10)
+        };
+        let code = if shade == 0 {
+            "\x1b[90m"
+        } else {
+            color_for_level_rich(shade, 10)
+        };
 
         // Print row: keep widths applied to digits only, wrap with ANSI to preserve alignment
         print!("| {:>lw$} ", lab, lw = label_w);
@@ -346,12 +390,12 @@ fn render_histogram_table(labels: &[&str], counts: &[usize], color: bool) {
     }
 }
 
-///// Build a centered hour axis for 24 columns with fixed per-column width.
-/// indent: spaces before the first column (row label width = 3 + 1 space -> 4)
-/// cell_w: visible width of each column (we use 3: two glyphs + one spacer)
+/// Build hour axis (24 columns).
 pub(super) fn build_hour_axis_24(indent: usize, cell_w: usize) -> String {
     let mut s = String::with_capacity(indent + 24 * cell_w);
-    for _ in 0..indent { s.push(' '); }
+    for _ in 0..indent {
+        s.push(' ');
+    }
     for h in 0..24 {
         let hh = format!("{:02}", h);
         // Left-align the 2-digit hour within the cell width to align with cell's left edge
@@ -360,14 +404,16 @@ pub(super) fn build_hour_axis_24(indent: usize, cell_w: usize) -> String {
     s
 }
 
-///// Generic heatmap renderer with N rows x 24 hours
+/// Render heatmap grid (rows x 24).
 fn render_heatmap_rows_x_24(rows: &[Vec<usize>], row_labels: &[String], color: bool) {
     let cols = 24usize;
     // Compute global max
     let mut max = 0usize;
     for r in rows {
         for &v in r.iter().take(cols) {
-            if v > max { max = v; }
+            if v > max {
+                max = v;
+            }
         }
     }
     // Header (centered hours per fixed-width column)
@@ -403,7 +449,7 @@ fn render_heatmap_rows_x_24(rows: &[Vec<usize>], row_labels: &[String], color: b
     println!("{}", build_hour_axis_24(4, 3));
 }
 
-/// Render a numeric table with N rows x 24 columns (counts)
+/// Build heatmap table.
 fn build_heatmap_table_rows_x_24(rows: &[Vec<usize>], row_labels: &[String]) -> String {
     use std::fmt::Write as _;
     // Compute max value to determine width (min width 2)
@@ -423,10 +469,14 @@ fn build_heatmap_table_rows_x_24(rows: &[Vec<usize>], row_labels: &[String]) -> 
     // Helper to draw a horizontal separator line
     let push_sep = |s: &mut String| {
         s.push('+');
-        for _ in 0..(rlw + 2) { s.push('-'); }
+        for _ in 0..(rlw + 2) {
+            s.push('-');
+        }
         for _ in 0..24 {
             s.push('+');
-            for _ in 0..(cell_w + 2) { s.push('-'); }
+            for _ in 0..(cell_w + 2) {
+                s.push('-');
+            }
         }
         s.push_str("+\n");
     };
@@ -458,15 +508,18 @@ fn build_heatmap_table_rows_x_24(rows: &[Vec<usize>], row_labels: &[String]) -> 
     out
 }
 
-/// Render a numeric table with N rows x 24 columns (counts)
+/// Render heatmap table.
 fn render_heatmap_table_rows_x_24(rows: &[Vec<usize>], row_labels: &[String]) {
     let s = build_heatmap_table_rows_x_24(rows, row_labels);
     print!("{}", s);
 }
 
-/// Render a colored numeric table with N rows x 24 columns (counts).
-/// Colors numbers according to intensity, preserving alignment via fixed widths.
-fn render_heatmap_table_rows_x_24_colored(rows: &[Vec<usize>], row_labels: &[String], _color: bool) {
+/// Render colored heatmap table.
+fn render_heatmap_table_rows_x_24_colored(
+    rows: &[Vec<usize>],
+    row_labels: &[String],
+    _color: bool,
+) {
     use std::fmt::Write as _;
 
     // Compute max to determine widths and intensities
@@ -486,10 +539,14 @@ fn render_heatmap_table_rows_x_24_colored(rows: &[Vec<usize>], row_labels: &[Str
     // Separator
     let push_sep = |s: &mut String| {
         s.push('+');
-        for _ in 0..(rlw + 2) { s.push('-'); }
+        for _ in 0..(rlw + 2) {
+            s.push('-');
+        }
         for _ in 0..24 {
             s.push('+');
-            for _ in 0..(cell_w + 2) { s.push('-'); }
+            for _ in 0..(cell_w + 2) {
+                s.push('-');
+            }
         }
         s.push_str("+\n");
     };
@@ -516,8 +573,16 @@ fn render_heatmap_table_rows_x_24_colored(rows: &[Vec<usize>], row_labels: &[Str
 
         for h in 0..24 {
             let v = rows[ri][h];
-            let shade = if v == 0 || max_val == 0 { 0 } else { intensity_index(v, max_val, 10) };
-            let code = if shade == 0 { "\x1b[90m" } else { color_for_level_rich(shade, 10) };
+            let shade = if v == 0 || max_val == 0 {
+                0
+            } else {
+                intensity_index(v, max_val, 10)
+            };
+            let code = if shade == 0 {
+                "\x1b[90m"
+            } else {
+                color_for_level_rich(shade, 10)
+            };
             print!("| {}{:>w$}{} ", code, v, ANSI_RESET, w = cell_w);
         }
         println!("|");
@@ -528,7 +593,7 @@ fn render_heatmap_table_rows_x_24_colored(rows: &[Vec<usize>], row_labels: &[Str
     }
 }
 
-/// Public runner
+/// Runner.
 
 pub fn run_code_frequency_with_options(
     group: Option<Group>,
@@ -547,10 +612,14 @@ pub fn run_code_frequency_with_options(
     match heatmap {
         Some(HeatmapKind::DowByHod) => {
             let grid = heatmap_dow_by_hod(&ts);
-            let labels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-            if color && !table { print!("\x1b[90m"); }
+            let labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            if color && !table {
+                print!("\x1b[90m");
+            }
             println!("Heatmap: Day-of-Week x Hour-of-Day (UTC), unit: commits/hour");
-            if color && !table { print!("\x1b[0m"); }
+            if color && !table {
+                print!("\x1b[0m");
+            }
             if !table {
                 print_ramp_legend_rich(color, "commits/hour");
                 println!();
@@ -570,9 +639,13 @@ pub fn run_code_frequency_with_options(
         }
         Some(HeatmapKind::DomByHod) => {
             let grid = heatmap_dom_by_hod(&ts);
-            if color && !table { print!("\x1b[90m"); }
+            if color && !table {
+                print!("\x1b[90m");
+            }
             println!("Heatmap: Day-of-Month x Hour-of-Day (UTC), unit: commits/hour");
-            if color && !table { print!("\x1b[0m"); }
+            if color && !table {
+                print!("\x1b[0m");
+            }
             if !table {
                 print_ramp_legend_rich(color, "commits/hour");
                 println!();
@@ -606,7 +679,7 @@ pub fn run_code_frequency_with_options(
                 }
                 Group::DayOfWeek => {
                     let bins = histogram_day_of_week(&ts);
-                    let labels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+                    let labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
                     if table {
                         render_histogram_table(&labels, &bins, color);
                     } else {
@@ -629,24 +702,25 @@ pub fn run_code_frequency_with_options(
     Ok(())
 }
 
-/// Convert Unix seconds to (year, month, day) in proleptic Gregorian, UTC.
-/// Based on public-domain algorithms (Howard Hinnant's civil_from_days).
+/// Convert Unix seconds to (y,m,d) UTC.
 fn ymd_from_unix(t: u64) -> (i32, u32, u32) {
     let days = (t / 86_400) as i64;
     civil_from_days(days)
 }
 
+/// Howard Hinnant's algorithm from
+/// https://howardhinnant.github.io/date_algorithms.html#civil_from_days
 fn civil_from_days(z: i64) -> (i32, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;                         // [0, 146096]
+    let doe = z - era * 146_097; // [0, 146096]
     let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
     let y = (yoe as i32) + era as i32 * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);   // [0, 365]
-    let mp = (5 * doy + 2) / 153;                        // [0, 11]
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;       // [1, 31]
-    let m = (mp + 2) % 12 + 1;                           // [1, 12]
-    let y = y + ((mp >= 10) as i32);                     // year increment if Jan/Feb
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let m = (mp + 2) % 12 + 1; // [1, 12]
+    let y = y + ((mp >= 10) as i32); // year increment if Jan/Feb
     (y, m as u32, d)
 }
 
@@ -658,9 +732,8 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
-    use std::time::{SystemTime, UNIX_EPOCH};
     use std::sync::MutexGuard;
-
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     // Temp repo pattern (auto-cleaned; clean git config; no pager)
     struct TempRepo {
@@ -683,51 +756,41 @@ mod tests {
             fs::create_dir_all(&path).unwrap();
             env::set_current_dir(&path).unwrap();
 
-            assert!(
-                Command::new("git")
-                    .args(["--no-pager", "init", "-q"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-            assert!(
-                Command::new("git")
-                    .args(["config", "commit.gpgsign", "false"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-            assert!(
-                Command::new("git")
-                    .args(["config", "core.hooksPath", "/dev/null"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-            assert!(
-                Command::new("git")
-                    .args(["config", "user.name", "Test"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-            assert!(
-                Command::new("git")
-                    .args(["config", "user.email", "test@example.com"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            assert!(Command::new("git")
+                .args(["--no-pager", "init", "-q"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .args(["config", "commit.gpgsign", "false"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .args(["config", "core.hooksPath", "/dev/null"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .args(["config", "user.name", "Test"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("git")
+                .args(["config", "user.email", "test@example.com"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
 
             // initial commit
             fs::write("INIT", "init\n").unwrap();
@@ -751,7 +814,11 @@ mod tests {
             c.stdout(Stdio::null()).stderr(Stdio::null());
             assert!(c.status().unwrap().success());
 
-            Self { _guard: guard, old_dir, path }
+            Self {
+                _guard: guard,
+                old_dir,
+                path,
+            }
         }
 
         fn commit_with_epoch(&self, name: &str, email: &str, file: &str, content: &str, ts: u64) {
@@ -813,7 +880,7 @@ mod tests {
     #[test]
     fn test_histogram_hour_of_day_basic() {
         // 00:00, 01:00, 01:59:59, 23:00
-        let ts = vec![0, 3600, 7199, 23*3600];
+        let ts = vec![0, 3600, 7199, 23 * 3600];
         let bins = histogram_hour_of_day(&ts);
         assert_eq!(bins[0], 1);
         assert_eq!(bins[1], 2);
@@ -845,8 +912,8 @@ mod tests {
         let d1 = 0;
         let d31 = 30 * 86_400;
         let bins = histogram_day_of_month(&[d1, d31, d31]);
-        assert_eq!(bins[0], 1);     // day 1
-        assert_eq!(bins[30], 2);    // day 31
+        assert_eq!(bins[0], 1); // day 1
+        assert_eq!(bins[30], 2); // day 31
     }
 
     #[test]
@@ -856,9 +923,10 @@ mod tests {
         // create commits at 00:00 and 13:00 on consecutive days
         let base_day = 20 * 86_400; // arbitrary epoch day
         repo.commit_with_epoch("Alice", "a@x", "a.txt", "a\n", base_day + 0);
-        repo.commit_with_epoch("Bob", "b@y", "b.txt", "b\n", base_day + 13*3_600);
+        repo.commit_with_epoch("Bob", "b@y", "b.txt", "b\n", base_day + 13 * 3_600);
         // Should run without error
-        run_code_frequency_with_options(Some(Group::HourOfDay), None, None, false, false).expect("ok");
+        run_code_frequency_with_options(Some(Group::HourOfDay), None, None, false, false)
+            .expect("ok");
     }
 
     #[test]
@@ -916,14 +984,21 @@ mod tests {
         let s = super::build_histogram_table(&labels, &counts);
         let lines: Vec<&str> = s.lines().collect();
         // Collect data lines starting with '|' (including header)
-        let pipe_lines: Vec<&str> = lines.iter().copied().filter(|l| l.starts_with('|')).collect();
+        let pipe_lines: Vec<&str> = lines
+            .iter()
+            .copied()
+            .filter(|l| l.starts_with('|'))
+            .collect();
         assert!(!pipe_lines.is_empty());
         let len0 = pipe_lines[0].len();
         let pipes0 = pipe_lines[0].chars().filter(|&c| c == '|').count();
         for l in pipe_lines {
             assert_eq!(l.len(), len0, "all '|' lines must be equal length");
             let pipes = l.chars().filter(|&c| c == '|').count();
-            assert_eq!(pipes, pipes0, "all '|' lines must have equal number of separators");
+            assert_eq!(
+                pipes, pipes0,
+                "all '|' lines must have equal number of separators"
+            );
         }
     }
 
@@ -935,14 +1010,21 @@ mod tests {
         let labels = vec!["R1".to_string(), "R2".to_string()];
         let s = super::build_heatmap_table_rows_x_24(&rows, &labels);
         let lines: Vec<&str> = s.lines().collect();
-        let pipe_lines: Vec<&str> = lines.iter().copied().filter(|l| l.starts_with('|')).collect();
+        let pipe_lines: Vec<&str> = lines
+            .iter()
+            .copied()
+            .filter(|l| l.starts_with('|'))
+            .collect();
         assert!(!pipe_lines.is_empty());
         let len0 = pipe_lines[0].len();
         let pipes0 = pipe_lines[0].chars().filter(|&c| c == '|').count();
         for l in pipe_lines {
             assert_eq!(l.len(), len0, "all '|' lines must be equal length");
             let pipes = l.chars().filter(|&c| c == '|').count();
-            assert_eq!(pipes, pipes0, "all '|' lines must have equal number of separators");
+            assert_eq!(
+                pipes, pipes0,
+                "all '|' lines must have equal number of separators"
+            );
         }
     }
 
@@ -953,8 +1035,9 @@ mod tests {
         // two commits at different hours
         let base_day = 30 * 86_400;
         _repo.commit_with_epoch("A", "a@x", "a.txt", "a\n", base_day + 0);
-        _repo.commit_with_epoch("B", "b@y", "b.txt", "b\n", base_day + 13*3_600);
-        super::run_code_frequency_with_options(Some(Group::HourOfDay), None, None, false, true).expect("ok");
+        _repo.commit_with_epoch("B", "b@y", "b.txt", "b\n", base_day + 13 * 3_600);
+        super::run_code_frequency_with_options(Some(Group::HourOfDay), None, None, false, true)
+            .expect("ok");
     }
 
     #[test]
@@ -962,9 +1045,16 @@ mod tests {
     fn test_end_to_end_heatmap_table_from_temp_repo() {
         let _repo = TempRepo::new("git-insights-freq-table-heat");
         let base_day = 40 * 86_400;
-        _repo.commit_with_epoch("C", "c@z", "c.txt", "c\n", base_day + 5*3_600);
-        _repo.commit_with_epoch("D", "d@z", "d.txt", "d\n", base_day + 23*3_600);
-        super::run_code_frequency_with_options(None, Some(HeatmapKind::DowByHod), None, false, true).expect("ok");
+        _repo.commit_with_epoch("C", "c@z", "c.txt", "c\n", base_day + 5 * 3_600);
+        _repo.commit_with_epoch("D", "d@z", "d.txt", "d\n", base_day + 23 * 3_600);
+        super::run_code_frequency_with_options(
+            None,
+            Some(HeatmapKind::DowByHod),
+            None,
+            false,
+            true,
+        )
+        .expect("ok");
     }
 
     #[test]
