@@ -2,7 +2,7 @@ use crate::stats::{AuthorStats, UserStats};
 use std::io::{self, Write};
 use std::time::Instant;
 
-/// Prints a formatted table of author statistics.
+/// Print author stats table.
 pub fn print_table(
     data: Vec<(String, AuthorStats)>,
     total_loc: usize,
@@ -47,18 +47,14 @@ pub fn print_table(
         );
     }
 }
- 
-/// Prints a file ownership table for a user.
-/// Rows: (file, user_loc, file_loc, pct)
+
+/// Print user file ownership table.
 pub fn print_user_ownership(rows: &[(String, usize, usize, f32)]) {
     println!(
         "| {:>4} | {:<60} | {:>7} | {:>7} | {:>6} |",
         "No.", "File", "userLOC", "fileLOC", "%own"
     );
-    println!(
-        "|{:->6}|:{:-<60}|{:->9}|{:->9}|{:->8}|",
-        "", "", "", "", ""
-    );
+    println!("|{:->6}|:{:-<60}|{:->9}|{:->9}|{:->8}|", "", "", "", "", "");
     for (i, (file, u, f, pct)) in rows.iter().enumerate() {
         println!(
             "| {:>4} | {:<60} | {:>7} | {:>7} | {:>5.1} |",
@@ -71,14 +67,12 @@ pub fn print_user_ownership(rows: &[(String, usize, usize, f32)]) {
     }
 }
 
-// helper to truncate long file paths for table display
+/// Truncate long paths for display.
 fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
     } else if max > 3 {
         let cut = max - 3;
-        // Prefer to keep a trailing '-' if we cut right before it
-        // e.g., "this-is-long", max=10 -> "this-is-..."
         let mut end = cut;
         if end > 0 && end < s.len() {
             let prev = &s[end.saturating_sub(1)..end];
@@ -94,8 +88,8 @@ fn truncate(s: &str, max: usize) -> String {
         s[..max].to_string()
     }
 }
- 
-/// Renders a progress bar to the console.
+
+/// Print progress bar.
 pub fn print_progress(processed: usize, total: usize, start_time: Instant) {
     const BAR_WIDTH: usize = 50;
     let percentage = processed as f32 / total as f32;
@@ -120,7 +114,7 @@ pub fn print_progress(processed: usize, total: usize, start_time: Instant) {
     io::stdout().flush().unwrap();
 }
 
-/// Prints a formatted table of user statistics.
+/// Print user stats.
 pub fn print_user_stats(username: &str, stats: &UserStats) {
     println!("\nStatistics for user: {}", username);
     println!("---------------------------------");
@@ -170,14 +164,12 @@ mod tests {
                 files,
             },
         ));
-        // Should not panic
         print_table(data, 100, 10, 1);
     }
 
     #[test]
     fn test_print_progress() {
         let start_time = Instant::now();
-        // Should not panic
         print_progress(50, 100, start_time);
     }
 
@@ -190,7 +182,6 @@ mod tests {
             pull_requests: 5,
             tags,
         };
-        // Should not panic
         print_user_stats("test_user", &stats);
     }
 
@@ -200,7 +191,6 @@ mod tests {
             pull_requests: 2,
             tags: HashSet::new(),
         };
-        // Should not panic
         print_user_stats("test_user_no_tags", &stats);
     }
 
@@ -210,7 +200,6 @@ mod tests {
             ("src/lib.rs".to_string(), 10, 20, 50.0),
             ("README.md".to_string(), 5, 5, 100.0),
         ];
-        // Should not panic
         super::print_user_ownership(&rows);
     }
 

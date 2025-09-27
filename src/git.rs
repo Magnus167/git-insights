@@ -27,13 +27,7 @@ pub fn is_git_installed() -> bool {
 
 /// Counts the number of merged pull requests for a given author.
 pub fn count_pull_requests(author: &str) -> Result<usize, String> {
-    let log_output = run_command(&[
-        "log",
-        "--merges",
-        "--author",
-        author,
-        "--pretty=format:%s", // %s gets the subject of the commit
-    ])?;
+    let log_output = run_command(&["log", "--merges", "--author", author, "--pretty=format:%s"])?;
 
     let pr_merges = log_output
         .lines()
@@ -64,21 +58,17 @@ mod tests {
 
     #[test]
     fn test_is_git_installed() {
-        // This test assumes git is installed on the system running the tests
         assert!(is_git_installed());
     }
 
     #[test]
     fn test_is_in_git_repo() {
-        // Serialize with other tests that may temporarily chdir to temp repos
         let _guard = crate::test_sync::test_lock();
-        // This test will pass because the project is a git repository
         assert!(is_in_git_repo());
     }
 
     #[test]
     fn test_run_command_success() {
-        // Test a command that should succeed
         let result = run_command(&["--version"]);
         assert!(result.is_ok());
         assert!(result.unwrap().starts_with("git version"));
@@ -86,7 +76,6 @@ mod tests {
 
     #[test]
     fn test_run_command_failure() {
-        // Test a command that should fail
         let result = run_command(&["invalid-command"]);
         assert!(result.is_err());
     }
