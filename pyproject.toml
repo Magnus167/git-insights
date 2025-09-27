@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
+
+[project]
+name = "git-insights"
+description = "A CLI tool to generate Git repo stats and insights."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "git-insights authors" }]
+dynamic = ["version"]
+
+[project.scripts]
+git-insights = "git_insights.__main__:main"
+
+[tool.maturin]
+features = ["python"]
+module-name = "git_insights._git_insights"
+bindings = "pyo3"
+python-source = "."
