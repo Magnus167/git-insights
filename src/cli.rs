@@ -524,8 +524,16 @@ EXAMPLES:
     }
 }
 
-pub fn version_string() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+pub fn channel_string() -> &'static str {
+    if cfg!(feature = "python") {
+        "pip"
+    } else {
+        "cargo"
+    }
+}
+
+pub fn version_string() -> String {
+    format!("{} ({})", env!("CARGO_PKG_VERSION"), channel_string())
 }
 
 #[cfg(test)]
@@ -709,6 +717,13 @@ mod tests {
         let cli = Cli::parse_from_args(vec!["git-insights".to_string(), "--version".to_string()])
             .expect("parse");
         assert!(matches!(cli.command, Commands::Version));
+    }
+
+    #[test]
+    fn test_version_string_includes_channel_and_version() {
+        let v = super::version_string();
+        assert!(v.ends_with(" (cargo)"));
+        assert!(v.starts_with(env!("CARGO_PKG_VERSION")));
     }
 
     #[test]
