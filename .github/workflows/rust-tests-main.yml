@@ -13,5 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Run tests
+
+      - name: Run Rust tests
         run: cargo test --release --verbose
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build and install Python package
+        run: pip install .
+
+      - name: Run Python unittests
+        run: python -m unittest discover -s tests/python -v
