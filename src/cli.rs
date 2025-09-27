@@ -11,7 +11,6 @@ pub enum HelpTopic {
 
 #[derive(Debug)]
 pub enum Commands {
-    // Default grouping by author name; pass --by-email/-e to group by name+email
     Stats {
         by_name: bool,
     },
@@ -31,7 +30,6 @@ pub enum Commands {
         color: bool,
         table: bool,
     },
-    // user <username> [--ownership] [--by-email|-e] [--top N|--top=N] [--sort loc|pct|--sort=loc]
     User {
         username: String,
         ownership: bool,
@@ -162,7 +160,6 @@ impl Cli {
                     }
                 } else {
                     let mut weeks: Option<usize> = None;
-                    // Default: color ON. Allow disabling with --no-color
                     let mut color = true;
 
                     let rest = &args[2..];
@@ -185,14 +182,12 @@ impl Cli {
                         } else if a == "--no-color" {
                             color = false;
                         } else if let Some(num) = a.strip_prefix("--") {
-                            // support shorthand like: timeline --52
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
                                 }
                             }
                         } else if let Some(num) = a.strip_prefix('-') {
-                            // support shorthand like: timeline -52
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
@@ -211,7 +206,6 @@ impl Cli {
                     }
                 } else {
                     let mut weeks: Option<usize> = None;
-                    // Default: color ON. Allow disabling with --no-color
                     let mut color = true;
 
                     let rest = &args[2..];
@@ -234,14 +228,12 @@ impl Cli {
                         } else if a == "--no-color" {
                             color = false;
                         } else if let Some(num) = a.strip_prefix("--") {
-                            // support shorthand like: heatmap --60 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
                                 }
                             }
                         } else if let Some(num) = a.strip_prefix('-') {
-                            // support shorthand like: heatmap -60 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
@@ -262,7 +254,6 @@ impl Cli {
                     let mut group: Option<String> = None;
                     let mut heatmap: Option<String> = None;
                     let mut weeks: Option<usize> = None;
-                    // Default: color ON. Allow disabling with --no-color
                     let mut color = true;
                     let mut table = false;
 
@@ -302,14 +293,12 @@ impl Cli {
                         } else if a == "--table" {
                             table = true;
                         } else if let Some(num) = a.strip_prefix("--") {
-                            // support shorthand like: code-frequency --52 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
                                 }
                             }
                         } else if let Some(num) = a.strip_prefix('-') {
-                            // support shorthand like: code-frequency -52 (weeks)
                             if num.chars().all(|c| c.is_ascii_digit()) {
                                 if let Ok(v) = num.parse::<usize>() {
                                     weeks = Some(v);
@@ -535,7 +524,6 @@ EXAMPLES:
     }
 }
 
-// Expose version pulled from Cargo metadata
 pub fn version_string() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
@@ -646,7 +634,6 @@ mod tests {
             _ => panic!("Expected User command with ownership flags"),
         }
 
-        // equals-style flags should also parse
         let cli2 = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "user".to_string(),
@@ -745,7 +732,7 @@ mod tests {
         match cli.command {
             Commands::Timeline { weeks, color } => {
                 assert!(weeks.is_none());
-                assert!(color); // default color ON
+                assert!(color);
             }
             _ => panic!("Expected Timeline command"),
         }
@@ -860,7 +847,6 @@ mod tests {
 
     #[test]
     fn test_cli_code_frequency_defaults_and_flags() {
-        // default: no group/heatmap -> histogram hod, color ON, weeks None
         let cli = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "code-frequency".to_string(),
@@ -883,7 +869,6 @@ mod tests {
             _ => panic!("Expected CodeFrequency"),
         }
 
-        // group & heatmap & weeks equals-style & no-color
         let cli2 = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "code-frequency".to_string(),
@@ -912,7 +897,6 @@ mod tests {
             _ => panic!("Expected CodeFrequency with flags"),
         }
 
-        // numeric shorthand for weeks
         let cli3 = Cli::parse_from_args(vec![
             "git-insights".to_string(),
             "code-frequency".to_string(),
