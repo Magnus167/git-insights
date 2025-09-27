@@ -13,7 +13,6 @@ use std::fs::File;
 use std::io::Write;
 
 fn main() {
-    // Parse CLI first so help/version work anywhere (even outside a git repo)
     let cli = match Cli::parse() {
         Ok(cli) => cli,
         Err(e) => {
@@ -22,7 +21,6 @@ fn main() {
         }
     };
 
-    // Handle help/version early and exit 0
     match &cli.command {
         Commands::Help { topic } => {
             println!("{}", render_help(topic.clone()));
@@ -35,7 +33,6 @@ fn main() {
         _ => {}
     }
 
-    // For all other commands we require git and a repo
     if !is_git_installed() {
         eprintln!(
             "Error: 'git' command not found. Please ensure Git is installed and in your PATH."
@@ -65,7 +62,6 @@ fn main() {
             sort,
         } => {
             if *ownership {
-                // defaults
                 let top_n = top.unwrap_or(10);
                 let sort_pct = sort.as_deref().map(|s| s == "pct").unwrap_or(false);
                 match get_user_file_ownership(username, *by_email, top_n, sort_pct) {
@@ -132,7 +128,6 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        // Help/Version already handled above
         _ => {}
     }
 }
