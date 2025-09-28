@@ -59,6 +59,40 @@ cd git-insights
 cargo install --path .
 ```
 
+### Installing via pip (Python)
+
+This project provides an optional Python package built with maturin/pyo3. Requirements:
+- Rust toolchain (for building the extension)
+- Python with pip
+- maturin (recommended): `pip install maturin`
+
+Install the Python package:
+```bash
+pip install .
+```
+
+Alternatively for local dev:
+```bash
+maturin develop --features python
+```
+
+### Python usage
+
+- CLI via Python:
+```bash
+python -m git_insights --help
+```
+
+- CLI via console script (installed by pip):
+```bash
+git-insights --help
+```
+
+- Programmatic (advanced):
+```python
+from git_insights import _git_insights
+code = _git_insights.run(["git-insights", "--version"])
+```
 ## Usage
 
 `git-insights` provides several commands to analyze your repository.
