@@ -3,6 +3,7 @@ pub mod code_frequency;
 pub mod git;
 pub mod output;
 pub mod stats;
+pub mod test_repo;
 pub mod test_sync;
 pub mod visualize;
 

@@ -703,7 +703,7 @@ pub fn run_code_frequency_with_options(
 }
 
 /// Convert Unix seconds to (y,m,d) UTC.
-fn ymd_from_unix(t: u64) -> (i32, u32, u32) {
+pub fn ymd_from_unix(t: u64) -> (i32, u32, u32) {
     let days = (t / 86_400) as i64;
     civil_from_days(days)
 }
@@ -785,7 +785,7 @@ mod tests {
                 .unwrap()
                 .success());
             assert!(Command::new("git")
-                .args(["config", "user.email", "test@example.com"])
+                .args(["config", "user.email", "test@test_git_insights.com"])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
@@ -808,11 +808,16 @@ mod tests {
                 .arg("-m")
                 .arg("chore: init");
             c.env("GIT_AUTHOR_NAME", "Init");
-            c.env("GIT_AUTHOR_EMAIL", "init@example.com");
+            c.env("GIT_AUTHOR_EMAIL", "init@test_git_insights.com");
             c.env("GIT_COMMITTER_NAME", "Init");
-            c.env("GIT_COMMITTER_EMAIL", "init@example.com");
-            c.stdout(Stdio::null()).stderr(Stdio::null());
-            assert!(c.status().unwrap().success());
+            c.env("GIT_COMMITTER_EMAIL", "init@test_git_insights.com");
+            // Capture output for better diagnostics on CI failures.
+            let out = c.output().expect("git commit spawn failed");
+            assert!(
+                out.status.success(),
+                "git commit failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
 
             Self {
                 _guard: guard,
@@ -833,6 +838,7 @@ mod tests {
             // add and commit with explicit dates
             let add_ok = Command::new("git")
                 .args(["add", "."])
+                .current_dir(&self.path)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
@@ -840,6 +846,7 @@ mod tests {
                 .unwrap_or(false)
                 || Command::new("git")
                     .args(["add", "-A", "."])
+                    .current_dir(&self.path)
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
@@ -848,25 +855,39 @@ mod tests {
             assert!(add_ok, "git add failed");
 
             let mut c = Command::new("git");
+            c.current_dir(&self.path);
             c.args(["-c", "commit.gpgsign=false"])
                 .args(["-c", "core.hooksPath=/dev/null"])
                 .args(["-c", "user.name=Test"])
-                .args(["-c", "user.email=test@example.com"])
+                .args(["-c", "user.email=test@test_git_insights.com"])
                 .arg("commit")
                 .arg("--no-verify")
                 .arg("-q")
                 .arg("--allow-empty")
                 .arg("-m")
                 .arg("test");
-            let date = format!("{ts} +0000");
+            let _day = ts / 86_400;
+            let h = (ts / 3_600) % 24;
+            let min = (ts / 60) % 60;
+            let sec = ts % 60;
+            let (y, mth, d) = super::ymd_from_unix(ts);
+            let date = format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02} +0000",
+                y, mth, d, h, min, sec
+            );
             c.env("GIT_AUTHOR_NAME", name);
             c.env("GIT_AUTHOR_EMAIL", email);
             c.env("GIT_COMMITTER_NAME", name);
             c.env("GIT_COMMITTER_EMAIL", email);
             c.env("GIT_AUTHOR_DATE", &date);
             c.env("GIT_COMMITTER_DATE", &date);
-            c.stdout(Stdio::null()).stderr(Stdio::null());
-            assert!(c.status().unwrap().success());
+            // Capture output for diagnostics if commit fails.
+            let out = c.output().expect("git commit spawn failed");
+            assert!(
+                out.status.success(),
+                "git commit failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
         }
     }
 
@@ -917,13 +938,24 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_end_to_end_from_temp_repo_histogram_hod() {
         let repo = TempRepo::new("git-insights-freq");
         // create commits at 00:00 and 13:00 on consecutive days
         let base_day = 20 * 86_400; // arbitrary epoch day
-        repo.commit_with_epoch("Alice", "a@x", "a.txt", "a\n", base_day + 0);
-        repo.commit_with_epoch("Bob", "b@y", "b.txt", "b\n", base_day + 13 * 3_600);
+        repo.commit_with_epoch(
+            "Alice",
+            "alice@test_git_insights.com",
+            "a.txt",
+            "a\n",
+            base_day + 0,
+        );
+        repo.commit_with_epoch(
+            "Bob",
+            "bob@test_git_insights.com",
+            "b.txt",
+            "b\n",
+            base_day + 13 * 3_600,
+        );
         // Should run without error
         run_code_frequency_with_options(Some(Group::HourOfDay), None, None, false, false)
             .expect("ok");
@@ -1029,24 +1061,40 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_end_to_end_histogram_table_from_temp_repo() {
         let _repo = TempRepo::new("git-insights-freq-table-hod");
         // two commits at different hours
         let base_day = 30 * 86_400;
-        _repo.commit_with_epoch("A", "a@x", "a.txt", "a\n", base_day + 0);
-        _repo.commit_with_epoch("B", "b@y", "b.txt", "b\n", base_day + 13 * 3_600);
+        _repo.commit_with_epoch("A", "a@test_git_insights.com", "a.txt", "a\n", base_day + 0);
+        _repo.commit_with_epoch(
+            "B",
+            "b@test_git_insights.com",
+            "b.txt",
+            "b\n",
+            base_day + 13 * 3_600,
+        );
         super::run_code_frequency_with_options(Some(Group::HourOfDay), None, None, false, true)
             .expect("ok");
     }
 
     #[test]
-    #[ignore]
     fn test_end_to_end_heatmap_table_from_temp_repo() {
         let _repo = TempRepo::new("git-insights-freq-table-heat");
         let base_day = 40 * 86_400;
-        _repo.commit_with_epoch("C", "c@z", "c.txt", "c\n", base_day + 5 * 3_600);
-        _repo.commit_with_epoch("D", "d@z", "d.txt", "d\n", base_day + 23 * 3_600);
+        _repo.commit_with_epoch(
+            "C",
+            "c@test_git_insights.com",
+            "c.txt",
+            "c\n",
+            base_day + 5 * 3_600,
+        );
+        _repo.commit_with_epoch(
+            "D",
+            "d@test_git_insights.com",
+            "d.txt",
+            "d\n",
+            base_day + 23 * 3_600,
+        );
         super::run_code_frequency_with_options(
             None,
             Some(HeatmapKind::DowByHod),
