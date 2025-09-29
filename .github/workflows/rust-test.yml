@@ -16,9 +16,17 @@ jobs:
       - name: Check crate version on crates.io
         run: python .github/scripts/version_check.py
 
+  commit-emails-check:
+    name: commit-emails-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check commit emails
+        run: python .github/scripts/commit_emails_check.py
+
   unittests-pr:
     name: unittests-pr
-    needs: version-check-pr
+    needs: [version-check-pr, commit-emails-check]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
