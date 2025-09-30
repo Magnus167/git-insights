@@ -1,15 +1,15 @@
-name: Rust Tests on Main
+name: ci-tests-main
 
 on:
-  push:
+  pull_request:
     branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  unittests-main-status:
-    name: unittests-main-status
+  unittest-main:
+    name: unittest-main
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -17,6 +17,7 @@ jobs:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
+
 
       - name: Run Rust tests
         run: cargo test --release --verbose
@@ -35,9 +36,10 @@ jobs:
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
 
-  unittests-main-success:
-    name: unittests-main-success
-    needs: [unittests-main-status]
+  unittest-main-success:
+    name: unittest-main-success
+    needs: [unittest-main]
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check status
@@ -48,3 +50,32 @@ jobs:
             echo "Some tests failed"
             exit 1
           fi
+
+  package-main-artifact:
+    name: package-main-artifact
+    needs: [unittest-main]
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build wheels
+        run: maturin build --release
+
+      - name: Build sdist
+        run: maturin sdist
+
+      - name: Upload Python package to GitHub artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-${{ github.sha }}
+          path: |
+            target/wheels/*
