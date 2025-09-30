@@ -1,39 +1,26 @@
-name: Rust PR Tests
+name: ci-tests-test
 
 on:
+  push:
+    branches: ["test"]
   pull_request:
-    branches: ["main"]
+    branches: ["test"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  version-check-pr:
-    name: version-check-pr
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Check crate version on crates.io
-        run: python .github/scripts/version_check.py
-
-  commit-emails-check:
-    name: commit-emails-check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Check commit emails
-        run: python .github/scripts/commit_emails_check.py
-
-  unittests-pr:
-    name: unittests-pr
-    needs: [version-check-pr, commit-emails-check]
-    runs-on: ubuntu-latest
+  unittest-test:
+    name: unittest-test
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
+
 
       - name: Run Rust tests
         run: cargo test --release --verbose
@@ -52,9 +39,9 @@ jobs:
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
 
-  unittests-pr-success:
-    name: unittests-pr-success
-    needs: [unittests-pr]
+  unittest-test-success:
+    name: unittest-test-success
+    needs: [unittest-test]
     runs-on: ubuntu-latest
     steps:
       - name: Check status
