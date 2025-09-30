@@ -1,16 +1,14 @@
 import subprocess
 import sys
 
-TEST_DOMAIN = "@test_git_insights.com"
-# TEST_DOMAIN = "@example.com"
+TEST_DOMAINS = ["@test_git_insights.com", "@example.com"]
+
 
 def run_git(args):
     return subprocess.run(
-        ["git"] + args,
-        capture_output=True,
-        text=True,
-        check=True
+        ["git"] + args, capture_output=True, text=True, check=True
     ).stdout.strip()
+
 
 def main():
     try:
@@ -24,8 +22,9 @@ def main():
 
     for line in log.splitlines():
         commit, email = line.split(maxsplit=1)
-        if email.endswith(TEST_DOMAIN):
+        if any(email.endswith(domain) for domain in TEST_DOMAINS):
             raise Exception(f"Testing Email {email} found in commit {commit}")
+
 
 if __name__ == "__main__":
     main()
