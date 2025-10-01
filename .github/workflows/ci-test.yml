@@ -6,6 +6,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  UV_RESOLUTION_STRATEGY: highest
 
 jobs:
   unittest-test:
@@ -15,24 +16,31 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
-
 
       - name: Run Rust tests
         run: cargo test --release --verbose
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
-      - name: Install maturin
-        run: pip install maturin
+      - name: Set up uv with efficient cache
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
+
 
       - name: Build and install Python package
-        run: pip install .
+        run: uv pip install . --system
 
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v

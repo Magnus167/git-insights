@@ -6,6 +6,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  UV_RESOLUTION_STRATEGY: highest
 
 jobs:
   ci-health-develop:
@@ -13,11 +14,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Check crate version on crates.io
-        run: python .github/scripts/version_check.py
-      - name: Check commit emails
-        run: python .github/scripts/commit_emails_check.py
 
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv (no-cache save for ephemeral job)
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          save-cache: false
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
+      - name: Run ci-health scripts
+        run: |
+          uv pip install packaging --system
+          python .github/scripts/version_check.py
+          python .github/scripts/commit_emails_check.py
 
   unittest-develop:
     name: unittest-develop
@@ -25,7 +43,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
 
       - name: Run Rust tests
         run: cargo test --release --verbose
@@ -35,11 +52,19 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install maturin
-        run: pip install maturin
+      - name: Set up uv with efficient cache
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
       - name: Build and install Python package
-        run: pip install .
+        run: uv pip install . --system
 
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
