@@ -6,6 +6,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  UV_RESOLUTION_STRATEGY: highest
 
 jobs:
   unittest-test:
@@ -26,14 +27,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install maturin
-        run: pip install maturin
+      - name: Set up uv with efficient cache
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
+
 
       - name: Build and install Python package
-        run: pip install .
+        run: uv pip install .
 
       - name: Run Python unittests
-        run: python -m unittest discover -s tests/python -v
+        run: uv run python -m unittest discover -s tests/python -v
 
   unittest-test-success:
     name: unittest-test-success
