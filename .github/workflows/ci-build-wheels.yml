@@ -60,7 +60,6 @@ jobs:
           args: >-
             --release
             -i python3.12
-            # ${{ runner.os == 'macOS' && '--universal2' || '' }}
           # Windows: nothing special; action builds win_amd64/win_arm64 as appropriate
 
       - name: Build sdist (maturin)
