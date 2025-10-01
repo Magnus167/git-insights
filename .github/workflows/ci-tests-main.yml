@@ -6,6 +6,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  UV_RESOLUTION_STRATEGY: highest
 
 jobs:
   unittest-main:
@@ -27,11 +28,20 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install maturin
-        run: pip install maturin
+      - name: Set up uv with efficient cache
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=${{ matrix.python-version }}-res=${{ env.UV_RESOLUTION_STRATEGY }}
+
 
       - name: Build and install Python package
-        run: pip install .
+        run: uv pip install . --system
 
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
@@ -64,14 +74,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install maturin
-        run: pip install maturin
+      - name: Set up uv with efficient cache
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
+
 
       - name: Build wheels
-        run: maturin build --release
+        run: uvx --from maturin maturin build --release
 
       - name: Build sdist
-        run: maturin sdist
+        run: uvx --from maturin maturin sdist
 
       - name: Upload Python package to GitHub artifacts
         uses: actions/upload-artifact@v4
