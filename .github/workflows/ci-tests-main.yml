@@ -49,7 +49,6 @@ jobs:
   unittest-main-success:
     name: unittest-main-success
     needs: [unittest-main]
-    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check status
