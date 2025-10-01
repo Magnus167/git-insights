@@ -11,11 +11,31 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  UV_RESOLUTION_STRATEGY: highest
+
 jobs:
   bump-and-pr:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv (no-cache save for ephemeral job)
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          save-cache: false
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
       - name: Run bump script
         env:
@@ -23,4 +43,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_ACTOR: ${{ github.actor }}
-        run: python .github/scripts/bump_version.py --create-pull-request
+        run: uv run python .github/scripts/bump_version.py --create-pull-request
