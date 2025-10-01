@@ -31,14 +31,11 @@ jobs:
             **/uv.lock
             **/*.py.lock
           cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
-      - name: Install packaging lib
-        run: uv pip install packaging
-      - name: Check crate version on crates.io
-        # run: python .github/scripts/version_check.py
-        run: uv run python .github/scripts/version_check.py
-      - name: Check commit emails
-        # run: python .github/scripts/commit_emails_check.py
-        run: uv run python .github/scripts/commit_emails_check.py
+      - name: Run ci-health scripts
+        run: |
+          uv pip install packaging --system
+          python .github/scripts/version_check.py
+          python .github/scripts/commit_emails_check.py
 
   unittest-develop:
     name: unittest-develop
