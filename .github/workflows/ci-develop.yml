@@ -20,21 +20,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up uv (no-cache save for ephemeral job)
-        id: setup-uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          save-cache: false
-          cache-dependency-glob: |
-            **/pyproject.toml
-            **/uv.lock
-            **/*.py.lock
-          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
+      # - name: Set up uv (no-cache save for ephemeral job)
+      #   id: setup-uv
+      #   uses: astral-sh/setup-uv@v6
+      #   with:
+      #     enable-cache: true
+      #     save-cache: false
+      #     cache-dependency-glob: |
+      #       **/pyproject.toml
+      #       **/uv.lock
+      #       **/*.py.lock
+      #     cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
       - name: Check crate version on crates.io
-        run: uv run python .github/scripts/version_check.py
+        run: python .github/scripts/version_check.py  
+        # run: uv run python .github/scripts/version_check.py
       - name: Check commit emails
-        run: uv run python .github/scripts/commit_emails_check.py
+        run: python .github/scripts/commit_emails_check.py  
+        # run: uv run python .github/scripts/commit_emails_check.py
 
 
   unittest-develop:
