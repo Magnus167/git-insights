@@ -39,11 +39,13 @@ jobs:
           cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
       # CHANGED: avoid extra build; build once in-place for tests
-      - name: Build extension for tests (maturin develop)
-        uses: PyO3/maturin-action@v1
-        with:
-          command: develop
-          args: --release
+      #   - name: Build extension for tests (maturin develop)
+      #     uses: PyO3/maturin-action@v1
+      #     with:
+      #       command: develop
+      #       args: --release
+      - name: Build and install Python package
+        run: uv pip install . --system
 
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
