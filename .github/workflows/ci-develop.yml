@@ -64,10 +64,10 @@ jobs:
           cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
       - name: Build and install Python package
-        run: uv pip install .
+        run: uv pip install . --system
 
       - name: Run Python unittests
-        run: uv run python -m unittest discover -s tests/python -v
+        run: python -m unittest discover -s tests/python -v
 
   unittest-develop-success:
     name: unittest-develop-success
