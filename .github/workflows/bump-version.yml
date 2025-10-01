@@ -25,22 +25,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up uv (no-cache save for ephemeral job)
-        id: setup-uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          save-cache: false
-          cache-dependency-glob: |
-            **/pyproject.toml
-            **/uv.lock
-            **/*.py.lock
-          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
-
       - name: Run bump script
         env:
           GITHUB_TOKEN: ${{ secrets.PRS_GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_ACTOR: ${{ github.actor }}
-        run: uv run python .github/scripts/bump_version.py --create-pull-request
+        run: python .github/scripts/bump_version.py --create-pull-request

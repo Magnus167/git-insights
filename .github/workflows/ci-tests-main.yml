@@ -41,10 +41,10 @@ jobs:
 
 
       - name: Build and install Python package
-        run: uv pip install .
+        run: uv pip install . --system
 
       - name: Run Python unittests
-        run: uv run python -m unittest discover -s tests/python -v
+        run: python -m unittest discover -s tests/python -v
 
   unittest-main-success:
     name: unittest-main-success
