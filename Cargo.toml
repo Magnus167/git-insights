@@ -11,7 +11,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 regex = "1.11.2"
-pyo3 = { version = "0.22.2", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.22.2", features = ["abi3-py38", "extension-module"], optional = true }
 
 
 [features]

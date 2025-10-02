@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: ["test"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   UV_RESOLUTION_STRATEGY: highest
@@ -15,17 +19,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
+        python-version: ["3.9", "3.13"]
     steps:
       - uses: actions/checkout@v5
 
       - name: Run Rust tests
         run: cargo test --release --verbose
 
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Set up uv with efficient cache
         id: setup-uv
@@ -36,7 +41,7 @@ jobs:
             **/pyproject.toml
             **/uv.lock
             **/*.py.lock
-          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
+          cache-suffix: os=${{ runner.os }}-py=${{ matrix.python-version }}-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
 
       - name: Build and install Python package
