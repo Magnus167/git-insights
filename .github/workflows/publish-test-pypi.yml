@@ -52,15 +52,31 @@ jobs:
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
 
+      # macOS: prep for universal2 wheel repair
+      - name: Prepare macOS wheel repair (delocate)
+        if: runner.os == 'macOS'
+        run: |
+          python -m pip install --upgrade pip
+          pip install delocate
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+
       - name: Build wheels (maturin)
         uses: PyO3/maturin-action@v1
         with:
           command: build
+          # Build Linux wheels inside manylinux_2_28 container
           manylinux: "2_28"
+          # universal2 for macOS via target input
           target: ${{ runner.os == 'macOS' && 'universal2-apple-darwin' || '' }}
           args: >-
             --release
             -i python3.12
+            --strip
+            # Fail the build if Linux wheel can't be repaired to manylinux_2_28
+            ${{ runner.os == 'Linux' && '--compatibility manylinux_2_28' || '' }}
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '11.0' || '' }}
 
       - name: Build sdist (Linux only)
         if: runner.os == 'Linux'
@@ -68,13 +84,21 @@ jobs:
         with:
           command: sdist
 
-      - name: Upload Python package artifacts
+      # Upload wheels from all OSes
+      - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: python-package-${{ matrix.os }}-${{ github.sha }}
-          path: |
-            target/wheels/*
-            dist/*.tar.gz
+          name: wheels-${{ matrix.os }}
+          path: target/wheels/*.whl
+          if-no-files-found: error
+
+      # Upload sdist only from Linux
+      - name: Upload sdist (Linux only)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
           if-no-files-found: error
 
   publish:
@@ -98,12 +122,20 @@ jobs:
           echo "Collected files:"
           ls -l upload
 
-      - name: "Preflight: verify expected set exists"
+      - name: "Preflight: reject plain linux wheels & verify set"
         run: |
           set -euo pipefail
-          count_all=$(ls upload/*.whl | wc -l)
-          echo "Total wheels: $count_all"
-          test "$count_all" -ge 3  # at least one per OS
+          # Reject any non-manylinux/musllinux Linux wheels
+          bad=$(ls upload/*.whl | grep -E '/[^/]+-linux_(x86_64|i686|aarch64|armv7l)\.whl$' || true)
+          if [ -n "$bad" ]; then
+            echo "ERROR: Found non-manylinux wheels (PyPI/TestPyPI will reject these):"
+            echo "$bad"
+            exit 1
+          fi
+          # Basic completeness checks
+          total=$(ls upload/*.whl | wc -l)
+          echo "Total wheels: $total"
+          test "$total" -ge 3  # at least one per OS
           if ls upload/*.tar.gz >/dev/null 2>&1; then
             sdist_count=$(ls upload/*.tar.gz | wc -l)
             echo "sdist: $sdist_count"
@@ -119,4 +151,5 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "maturin>=1.4"
+          # No --skip-existing -> fail if any file already exists (no partial uploads)
           maturin upload --repository-url https://test.pypi.org/legacy/ upload/*
