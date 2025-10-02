@@ -23,21 +23,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Set up uv (no-cache save for ephemeral job)
-        id: setup-uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          save-cache: false
-          cache-dependency-glob: |
-            **/pyproject.toml
-            **/uv.lock
-            **/*.py.lock
-          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
       - name: Run ci-health scripts
         run: |
-          uv pip install packaging --system
+          pip install packaging
           python .github/scripts/version_check.py
           python .github/scripts/commit_emails_check.py
 

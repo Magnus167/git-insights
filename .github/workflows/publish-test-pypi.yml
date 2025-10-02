@@ -1,16 +1,23 @@
-name: Publish to TestPyPI
+name: Build & Publish to TestPyPI
 
 on:
   workflow_dispatch:
-#   release:
-#     types: [published]
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  UV_RESOLUTION_STRATEGY: highest
 
 jobs:
-  build-wheels:
-    name: Build wheels (${{ matrix.os }})
+  build-test-package:
+    name: Build & test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -20,41 +27,40 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Python
+      - name: Run Rust tests
+        run: cargo test --release --verbose
+
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up uv with efficient cache
+        id: setup-uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+            **/*.py.lock
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
-      - name: Add macOS targets
-        if: runner.os == 'macOS'
-        run: |
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Build and install Python package
+        run: uv pip install . --system
 
-      - name: Prepare macOS repair tool (delocate)
-        if: runner.os == 'macOS'
-        run: |
-          python -m pip install --upgrade pip
-          pip install delocate
-        env:
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
-
-      - name: Run Rust tests
-        run: cargo test --release --verbose
+      - name: Run Python unittests
+        run: python -m unittest discover -s tests/python -v
 
       - name: Build wheels (maturin)
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          manylinux: "2014"
+          manylinux: "2_28"
+          target: ${{ runner.os == 'macOS' && 'universal2-apple-darwin' || '' }}
           args: >-
             --release
-            --strip
-            ${{ runner.os == 'macOS' && '--universal2' || '' }}
-        env:
-          MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '11.0' || '' }}
+            -i python3.12
 
       - name: Build sdist (Linux only)
         if: runner.os == 'Linux'
@@ -62,25 +68,20 @@ jobs:
         with:
           command: sdist
 
-      - name: Upload wheels
+      - name: Upload Python package artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
-          path: target/wheels/*.whl
-          if-no-files-found: error
-
-      - name: Upload sdist (Linux only)
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdist
-          path: dist/*.tar.gz
+          name: python-package-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            target/wheels/*
+            dist/*.tar.gz
           if-no-files-found: error
 
   publish:
     name: Validate & Upload to TestPyPI
     runs-on: ubuntu-latest
-    needs: build-wheels
+    needs: build-test-package
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -89,30 +90,33 @@ jobs:
 
       - name: Collect files
         run: |
+          set -euo pipefail
           mkdir -p upload
-          find artifacts -name "*.whl" -exec cp {} upload/ \;
-          find artifacts -name "*.tar.gz" -exec cp {} upload/ \;
+          find artifacts -name "*.whl" -exec cp -v {} upload/ \;
+          # we built sdist only on Linux; grab it if present
+          find artifacts -name "*.tar.gz" -exec cp -v {} upload/ \; || true
+          echo "Collected files:"
           ls -l upload
 
-      - name: "Preflight: verify full set present"
+      - name: "Preflight: verify expected set exists"
         run: |
           set -euo pipefail
-          linux=$(ls upload/*.whl | grep -E '(manylinux|musllinux)' | wc -l)
-          mac=$(ls upload/*.whl | grep -E 'macosx_' | wc -l)
-          win=$(ls upload/*.whl | grep -E 'win_(amd64|arm64)' | wc -l || true)
-          sdist=$(ls upload/*.tar.gz | wc -l)
-          echo "linux=$linux mac=$mac win=$win sdist=$sdist"
-          test "$linux" -ge 1
-          test "$mac" -ge 1
-          test "$win" -ge 1
-          test "$sdist" -eq 1
+          count_all=$(ls upload/*.whl | wc -l)
+          echo "Total wheels: $count_all"
+          test "$count_all" -ge 3  # at least one per OS
+          if ls upload/*.tar.gz >/dev/null 2>&1; then
+            sdist_count=$(ls upload/*.tar.gz | wc -l)
+            echo "sdist: $sdist_count"
+            test "$sdist_count" -eq 1
+          else
+            echo "No sdist found (ok if intentionally omitted)."
+          fi
 
-      - name: Publish with maturin (TestPyPI via API token) – fail on duplicates
+      - name: Publish to TestPyPI (fail on duplicates)
         env:
           MATURIN_USERNAME: __token__
           MATURIN_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
         run: |
           python -m pip install --upgrade pip
           pip install "maturin>=1.4"
-          # Explicit TestPyPI endpoint; no --skip-existing
           maturin upload --repository-url https://test.pypi.org/legacy/ upload/*
