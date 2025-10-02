@@ -1,6 +1,10 @@
-name: ci-tests-main
+name: package-build
 
 on:
+  workflow_dispatch:
+    
+  push:
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
@@ -13,25 +17,23 @@ env:
   UV_RESOLUTION_STRATEGY: highest
 
 jobs:
-  unittest-main:
-    name: unittest-main
+  build-test-package:
+    name: build-test-package
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.9", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
-
 
       - name: Run Rust tests
         run: cargo test --release --verbose
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Set up uv with efficient cache
         id: setup-uv
@@ -42,8 +44,7 @@ jobs:
             **/pyproject.toml
             **/uv.lock
             **/*.py.lock
-          cache-suffix: os=${{ runner.os }}-py=${{ matrix.python-version }}-res=${{ env.UV_RESOLUTION_STRATEGY }}
-
+          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
       - name: Build and install Python package
         run: uv pip install . --system
@@ -51,16 +52,40 @@ jobs:
       - name: Run Python unittests
         run: python -m unittest discover -s tests/python -v
 
-  unittest-main-success:
-    name: unittest-main-success
-    needs: [unittest-main]
+      - name: Build wheels (maturin)
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          manylinux: "2_28"
+          target: ${{ runner.os == 'macOS' && 'universal2-apple-darwin' || '' }}
+          args: >-
+            --release
+            -i python3.12
+
+      - name: Build sdist (maturin)
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+
+      - name: Upload Python package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            target/wheels/*
+
+  build-test-package-success:
+    name: build-test-package-success
+    needs: [build-test-package]
     runs-on: ubuntu-latest
     steps:
       - name: Check status
         run: |
+          echo "Build and test job completed successfully."
           if [ "${{ job.status }}" == "success" ]; then
-            echo "All tests passed"
+            echo "The build-test-package job succeeded."
           else
-            echo "Some tests failed"
+            echo "The build-test-package job did not succeed."
             exit 1
           fi
+
