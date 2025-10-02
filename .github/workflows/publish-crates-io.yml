@@ -14,7 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Check crate version on crates.io
-        run: python .github/scripts/version_check.py
+        run: |
+          python .github/scripts/version_check.py
+          python .github/scripts/commit_emails_check.py
 
   unittests-release:
     name: Unit Tests (Release)

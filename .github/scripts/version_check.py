@@ -14,6 +14,7 @@ print(f"Local: {loc}")
 print(f"Remote: {rem}")
 
 if loc <= rem:
-    sys.exit(f"❌ {loc} <= {rem}, bump Cargo.toml")
-
+    print(f"❌ {loc} <= {rem}, bump Cargo.toml")
+    sys.exit(1)
+    
 print(f"✅ {loc} > {rem}")
