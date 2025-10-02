@@ -42,12 +42,6 @@ jobs:
             **/*.py.lock
           cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
 
-      # CHANGED: avoid extra build; build once in-place for tests
-    #   - name: Build extension for tests (maturin develop)
-    #     uses: PyO3/maturin-action@v1
-    #     with:
-    #       command: develop
-    #       args: --release
       - name: Build and install Python package
         run: uv pip install . --system
 
@@ -58,13 +52,11 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          # Linux: use manylinux container for portable wheels (documented input)
           manylinux: "2_28"
           target: ${{ runner.os == 'macOS' && 'universal2-apple-darwin' || '' }}
           args: >-
             --release
             -i python3.12
-          # Windows: nothing special; action builds win_amd64/win_arm64 as appropriate
 
       - name: Build sdist (maturin)
         uses: PyO3/maturin-action@v1
