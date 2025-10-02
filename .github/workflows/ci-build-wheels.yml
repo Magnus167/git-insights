@@ -1,4 +1,4 @@
-name: ci-build-wheels
+name: package-build
 
 on:
   workflow_dispatch:
