@@ -1,4 +1,4 @@
-name: ci-build-wheels
+name: package-build
 
 on:
   workflow_dispatch:
@@ -89,22 +89,3 @@ jobs:
             exit 1
           fi
 
-  # build-test-package-success-on-push:
-  #   name: build-test-package-success-on-push
-  #   if: github.event_name == 'push'
-  #   needs: [build-test-package]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Check status
-  #       run: |
-  #         echo "Build and test job completed successfully."
-  #         if [ "${{ job.status }}" == "success" ]; then
-  #           echo "The build-test-package job succeeded."
-  #         else
-  #           echo "The build-test-package job did not succeed."
-  #           exit 1
-  #         fi
-  #     - name: Download Python package artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: python-package-ubuntu-latest-${{ github.sha }}
