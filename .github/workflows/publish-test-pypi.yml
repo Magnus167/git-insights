@@ -70,7 +70,6 @@ jobs:
             --release
             -i python3.12
             --strip
-            ${{ runner.os == 'Linux' && '--compatibility manylinux_2_28' || '' }}
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '11.0' || '' }}
 
@@ -142,4 +141,4 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "maturin>=1.4"
-          maturin upload --repository-url https://test.pypi.org/legacy/ upload/*
+          maturin upload --repository-url https://test.pypi.org/legacy/ upload/*|
