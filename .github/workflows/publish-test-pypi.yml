@@ -91,7 +91,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sdist
-          path: target/sdist/*.tar.gz # Corrected path
+          path: dist/*.tar.gz
           if-no-files-found: error
 
   publish:
