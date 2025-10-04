@@ -68,8 +68,8 @@ jobs:
           target: ${{ runner.os == 'macOS' && 'universal2-apple-darwin' || '' }}
           args: >-
             --release
-            ${{ runner.os != 'Linux' && '-i python3.12' || '' }}
             --strip
+            ${{ runner.os != 'Linux' && '-i python3.12' || '' }}
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '11.0' || '' }}
 
@@ -91,7 +91,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sdist
-          # This path is based on the build log you provided.
           path: target/wheels/*.tar.gz
           if-no-files-found: error
 
