@@ -19,27 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: ./.github/actions/version-check
         with:
           python-version: "3.12"
 
-      - name: Set up uv (no-cache save for ephemeral job)
-        id: setup-uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          save-cache: false
-          cache-dependency-glob: |
-            **/pyproject.toml
-            **/uv.lock
-            **/*.py.lock
-          cache-suffix: os=${{ runner.os }}-py=3.12-res=${{ env.UV_RESOLUTION_STRATEGY }}
-      - name: Run ci-health scripts
-        run: |
-          uv pip install packaging --system
-          python .github/scripts/version_check.py
-          python .github/scripts/commit_emails_check.py
+      - name: Run commit emails check
+        run: python .github/scripts/commit_emails_check.py
 
   unittest-develop:
     name: unittest-develop
