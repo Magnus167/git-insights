@@ -139,9 +139,6 @@ jobs:
             echo "No sdist found (ok if intentionally omitted)."
           fi
 
-          # temporary disable
-          exit 1 
-
       - name: Publish to TestPyPI (fail on duplicates)
         env:
           MATURIN_USERNAME: __token__
