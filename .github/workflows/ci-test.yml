@@ -13,6 +13,18 @@ env:
   UV_RESOLUTION_STRATEGY: highest
 
 jobs:
+  ci-health-test:
+    name: ci-health-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/version-check
+        with:
+          python-version: "3.12"
+      - name: Run commit emails check
+        run: python .github/scripts/commit_emails_check.py
+
   unittest-test:
     name: unittest-test
     runs-on: ${{ matrix.os }}
@@ -42,7 +54,6 @@ jobs:
             **/uv.lock
             **/*.py.lock
           cache-suffix: os=${{ runner.os }}-py=${{ matrix.python-version }}-res=${{ env.UV_RESOLUTION_STRATEGY }}
-
 
       - name: Build and install Python package
         run: uv pip install . --system

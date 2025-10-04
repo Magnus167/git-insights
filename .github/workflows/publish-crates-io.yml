@@ -13,8 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Check crate version on crates.io
-        run: python .github/scripts/version_check.py
+      - uses: ./.github/actions/version-check
+        with:
+          python-version: "3.12"
+      - name: Run commit emails check
+        run: python .github/scripts/commit_emails_check.py
 
   unittests-release:
     name: Unit Tests (Release)
