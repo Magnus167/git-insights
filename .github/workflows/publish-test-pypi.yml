@@ -115,6 +115,9 @@ jobs:
       - name: "Preflight: reject plain linux wheels & verify set"
         run: |
           set -euo pipefail
+          echo "Files in upload directory:"
+          ls -l upload
+
           bad=$(ls upload/*.whl | grep -E '/[^/]+-linux_(x86_64|i686|aarch64|armv7l)\.whl$' || true)
           if [ -n "$bad" ]; then
             echo "ERROR: Found non-manylinux wheels:"
