@@ -60,22 +60,13 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
 
-      - name: Set maturin build arguments
-        id: maturin-args
-        run: |
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            echo "args=--release --strip" >> $GITHUB_OUTPUT
-          else
-            echo "args=--release --strip -i python3.12" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build wheels (maturin)
         uses: PyO3/maturin-action@v1
         with:
           command: build
           manylinux: "2_28"
           target: ${{ runner.os == 'macOS' && 'universal2-apple-darwin' || '' }}
-          args: ${{ steps.maturin-args.outputs.args }}
+          args: --release --strip ${{ runner.os != 'Linux' && '-i python3.12' || '' }}
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ runner.os == 'macOS' && '11.0' || '' }}
 
@@ -84,13 +75,14 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
+          # Explicitly set the output directory for predictability
           args: --out target/sdist
 
       - name: Upload Python package artifacts (wheels)
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}
-          path: target/wheels/*.whl
+          path: target/wheels/
           if-no-files-found: error
 
       - name: Upload sdist (Linux only)
@@ -148,4 +140,4 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "maturin>=1.4"
-          maturin upload --repository-url https://test.pypi.org/legacy/ upload/*```
+          maturin upload --repository-url https://test.pypi.org/legacy/ upload/*
