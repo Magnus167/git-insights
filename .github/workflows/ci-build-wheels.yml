@@ -17,9 +17,19 @@ env:
   UV_RESOLUTION_STRATEGY: highest
 
 jobs:
+  version-check:
+    name: Version check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/version-check
+        with:
+          python-version: "3.12"
+
   build-test-package:
     name: build-test-package
     runs-on: ${{ matrix.os }}
+    needs: version-check
     strategy:
       fail-fast: false
       matrix:
@@ -88,4 +98,3 @@ jobs:
             echo "The build-test-package job did not succeed."
             exit 1
           fi
-

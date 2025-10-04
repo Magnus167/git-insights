@@ -19,15 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: ./.github/actions/version-check
         with:
           python-version: "3.12"
-      - name: Run ci-health scripts
-        run: |
-          pip install packaging
-          python .github/scripts/version_check.py
-          python .github/scripts/commit_emails_check.py
+      - name: Run commit emails check
+        run: python .github/scripts/commit_emails_check.py
 
   unittest-test:
     name: unittest-test

@@ -13,8 +13,18 @@ env:
   UV_RESOLUTION_STRATEGY: highest
 
 jobs:
+  version-check:
+    name: Version check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/version-check
+        with:
+          python-version: "3.12"
+
   unittest-main:
     name: unittest-main
+    needs: version-check
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
