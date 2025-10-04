@@ -61,6 +61,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
 
       - name: Clean previous builds
+        if: runner.os == 'Linux' || runner.os == 'macOS'
         run: rm -rf target/wheels
 
       - name: Build wheels (maturin)
