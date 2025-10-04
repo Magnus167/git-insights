@@ -60,6 +60,9 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
 
+      - name: Clean previous builds
+        run: rm -rf target/wheels
+
       - name: Build wheels (maturin)
         uses: PyO3/maturin-action@v1
         with:
@@ -134,6 +137,9 @@ jobs:
           else
             echo "No sdist found (ok if intentionally omitted)."
           fi
+
+          # temporary disable
+          exit 1 
 
       - name: Publish to TestPyPI (fail on duplicates)
         env:
